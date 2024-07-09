@@ -1,0 +1,37 @@
+FROM osrf/ros:humble-desktop
+# install rtabmap packages
+ARG CACHE_DATE=2016-01-01
+
+RUN apt-get update && apt-get install -y \
+    ros-humble-rtabmap \
+    ros-humble-rtabmap-ros \
+    libxkbcommon-x11-0 \
+    x11-apps \
+    mesa-utils \
+    libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    && rm -rf /var/lib/apt/lists/
+
+RUN mkdir -p ~/turtlebot3_ws/src && \
+    cd ~/turtlebot3_ws/src && \
+    git clone -b humble-devel https://github.com/ROBOTIS-GIT/turtlebot3.git && \
+    git clone -b humble-devel https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git && \
+    git clone -b humble-devel https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git
+
+RUN apt-get update && apt-get install -y \
+    ros-humble-gazebo-ros-pkgs \
+    ros-humble-gazebo-ros2-control \
+    python3-colcon-common-extensions \
+    ros-humble-dynamixel-sdk \
+    ros-humble-turtlebot3-description \
+    ros-humble-turtlebot3-bringup \
+    ros-humble-turtlebot3-gazebo
+
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && \
+    cd /root/turtlebot3_ws && \
+    colcon build && \
+    source /opt/ros/humble/setup.bash"
+
+ENTRYPOINT ["/bin/bash"]
+
+WORKDIR /root/turtlebot3_ws
