@@ -77,13 +77,21 @@ To build the Docker image for this project, follow these steps:
 1. Clone the Git repository:
 
     ```bash
-    git clone repository_url
+    git clone https://github.com/ZhiangChen/augmented_mapping
     ```
 
 2. Navigate to the cloned repository:
 
     ```bash
-    cd repository_name
+    cd docker/fuel_docker
+    ```
+
+    ```bash
+    cd docker/fast_planner_docker
+    ```
+
+    ```bash
+    cd docker/rtabmap_docker
     ```
 
 3. Build the Docker image:
@@ -122,7 +130,9 @@ To run the Docker container with X11 forwarding, follow these steps:
     docker exec -it <container_name> bash
     ```
 
-## Running FUEL in Docker Container Refer to [FUEL](https://github.com/HKUST-Aerial-Robotics/FUEL) for more detailed information. 1. **Run rviz**: 
+## Running FUEL in Docker Container Refer to [FUEL](https://github.com/HKUST-Aerial-Robotics/FUEL) for more detailed information. 
+
+1. **Run rviz**: 
 ```bash 
 source devel/setup.bash && roslaunch exploration_manager rviz.launch 
 ``` 
