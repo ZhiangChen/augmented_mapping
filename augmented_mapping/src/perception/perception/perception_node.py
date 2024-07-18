@@ -48,7 +48,7 @@ class Perception(Node):
 
         # Create subscribers
         self.vehicle_odometry_subscriber = self.create_subscription(
-            VehicleOdometry, '/fmu/out/vehicle_local_position', self.vehicle_odometry_callback, qos_profile)
+            VehicleOdometry, '/fmu/out/vehicle_odometry', self.vehicle_odometry_callback, qos_profile)
 
         # Initialize variables
         self.offboard_setpoint_counter = 0
@@ -144,29 +144,29 @@ class Perception(Node):
         quaternion = self.vehicle_odometry.q
         T_uav_world = self.create_translation_matrix(position, quaternion)
 
-        self.get_logger().info(str(T_uav_world))
-        self.get_logger().info(str(np.shape(T_uav_world)))
         T_camera_uav = np.dot(T_uav_camera, T_camera_sensor)
         T_camera_world = np.dot(T_uav_world, T_camera_uav)
-        self.get_logger().info(str(T_camera_world))
-        self.get_logger().info(str(np.shape(T_camera_world)))
 
         # Extract position (translation vector) from the transformation matrix
         position = T_camera_world[:3, 3]
         
         # Extract orientation (rotation matrix to quaternion) from the transformation matrix
         rotation_matrix = T_camera_world[:3, :3]
-        self.get_logger().info(str(rotation_matrix))
-        self.get_logger().info(str(np.shape(rotation_matrix)))
-        orientation = self.quaternion_from_matrix(rotation_matrix)
+        orientation = tf.quaternion_from_matrix(T_camera_world)
 
         # Create a PoseStamped message
         pose_msg = PoseStamped()
         pose_msg.header.stamp = self.get_clock().now().to_msg()
         pose_msg.header.frame_id = "world"  # Adjust frame_id as per your setup
-        pose_msg.pose.position = Point(*position)
-        pose_msg.pose.orientation = Quaternion(*orientation)
+        pose_msg.pose.position.x = position[0]
+        pose_msg.pose.position.y = position[1]
+        pose_msg.pose.position.z = position[2]
+        pose_msg.pose.orientation.x = orientation[0]
+        pose_msg.pose.orientation.y = orientation[1]
+        pose_msg.pose.orientation.z = orientation[2]
+        pose_msg.pose.orientation.w = orientation[3]
 
+        self.odometry_topic_publisher.publish(odom)
         self.sensor_pose_publisher.publish(pose_msg)
 
 def main(args=None) -> None:
