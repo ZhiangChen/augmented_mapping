@@ -90,7 +90,7 @@ class VelocityControl(Node):
         self.timer = self.create_timer(0.01, self.timer_callback)  # 100 Hz timer
         self.altitude = -15.0  # Target altitude in meters
         self.takeoff_duration = 5.0
-        self.move_duration = 10.5  
+        self.move_duration = 10.5
         self.hover_thrust = 0.79  
         self.pitch_angle = -0.05  
         self.roll_angle = -0.15  
@@ -207,36 +207,58 @@ class VelocityControl(Node):
         msg.position = [float('nan'), float('nan'), float('nan')]
         msg.acceleration = [float('nan'), float('nan'), float('nan')]
         msg.yaw = float('nan') 
+        # if self.takeoff == True:
+        #     if self.vehicle_local_position.z > -7.0:
+        #         if self.pos_vel is not None:
+        #             msg.velocity = [self.pos_vel[0], self.pos_vel[1], -5.0]
+        #             msg.yawspeed = 0.0
+        #         else:
+        #             msg.velocity = [0.0, 0.0, -5.0]
+        #             msg.yawspeed = 0.0
+        #     else:
+        #         self.takeoff = False
+        #         if self.pos_vel is not None:
+        #             msg.velocity = [self.pos_vel[0], self.pos_vel[1], 0.0]
+        #             msg.yawspeed = yaw_rate
+        #         else:
+        #             self.get_logger().info("Reached 5 meters")
+        #             msg.velocity = [0.0, 0.0, 0.0]
+        #             msg.yawspeed = 0.0
+        # else:
+        #     if self.pos_vel is not None:
+        #         msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
+        #         msg.yawspeed = self.pos_vel[3]
+        #     else:
+        #         current_time = self.get_clock().now()
+        #         elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
+        #         if (elapsed_time < self.move_duration):
+        #             msg.velocity = [2.7, 5.0, 0.0]
+        #             msg.yawspeed = 0.0
+        #         else:
+        #             msg.velocity = [0.0, 0.0, 0.0]
+        #             msg.yawspeed = 0.0
+
+        current_time = self.get_clock().now()
+        elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
+
         if self.takeoff == True:
-            if self.vehicle_local_position.z > -5.0:
-                if self.pos_vel is not None:
-                    msg.velocity = [self.pos_vel[0], self.pos_vel[1], -5.0]
-                    msg.yawspeed = 0.0
-                else:
-                    msg.velocity = [0.0, 0.0, -5.0]
-                    msg.yawspeed = 0.0
+            if self.vehicle_local_position.z > -7.0:
+                msg.velocity = [0.0, 0.0, -5.0]
+                msg.yawspeed = 0.0
             else:
                 self.takeoff = False
-                if self.pos_vel is not None:
-                    msg.velocity = [self.pos_vel[0], self.pos_vel[1], 0.0]
-                    msg.yawspeed = yaw_rate
-                else:
-                    self.get_logger().info("Reached 5 meters")
-                    msg.velocity = [0.0, 0.0, 0.0]
-                    msg.yawspeed = 0.0
+                self.get_logger().info("Reached 5 meters")
+        else if (elapsed_time < self.move_duration):
+            msg.velocity = [2.7, 5.0, 0.0]
+            msg.yawspeed = 0.0
+
         else:
             if self.pos_vel is not None:
                 msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
                 msg.yawspeed = self.pos_vel[3]
             else:
-                current_time = self.get_clock().now()
-                elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
-                if (elapsed_time < self.move_duration):
-                    msg.velocity = [1.2, 5.0, 0.0]
-                    msg.yawspeed = 0.0
-                else:
-                    msg.velocity = [0.0, 0.0, 0.0]
-                    msg.yawspeed = 0.0
+                msg.velocity = [0.0, 0.0, 0.0]
+                msg.yawspeed = 0.0
 
         self.trajectory_setpoint_publisher.publish(msg)
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
