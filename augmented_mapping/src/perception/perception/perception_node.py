@@ -34,7 +34,9 @@ class Perception(Node):
     """Node for controlling a vehicle in offboard mode using velocity control."""
 
     def __init__(self) -> None:
-        super().__init__('attitude_control')
+        super().__init__('perception_node')
+
+        # self.declare_parameter('use_sim_time', True)
 
         # Configure QoS profile for publishing and subscribing
         qos_profile = QoSProfile(
@@ -113,8 +115,8 @@ class Perception(Node):
         # Header
         odom.header = Header()
         odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = 'odom'
-        odom.child_frame_id = 'base_link'
+        odom.header.frame_id = '/simulator'
+        odom.child_frame_id = ''
 
         position = self.vehicle_odometry.position
         # Quanternion in x,y,z,w
@@ -146,7 +148,7 @@ class Perception(Node):
         odom.twist.twist.angular.y = float(self.vehicle_odometry.angular_velocity[0])
         odom.twist.twist.angular.z = float(self.vehicle_odometry.angular_velocity[2])
 
-        camera_offset = [0.12, 0.03, 0.002]
+        camera_offset = [0.15, 0.03, 0.002]
 
         camera_offset_T = np.eye(4)
         camera_offset_T[:3, 3] = camera_offset
@@ -173,8 +175,8 @@ class Perception(Node):
         self.odometry_topic_publisher.publish(odom)
         self.sensor_pose_publisher.publish(pose_msg)
 
-        self.get_logger().info("odom " + str(new_quaternion))
-        self.get_logger().info("sensor " + str(cam_orientation))
+        # self.get_logger().info("odom " + str(new_quaternion))
+        # self.get_logger().info("sensor " + str(cam_orientation))
 
 def main(args=None) -> None:
     print('Starting offboard control node...')
@@ -186,30 +188,3 @@ def main(args=None) -> None:
 
 if __name__ == '__main__':
     main()
-
-
-    # def quaternion_from_matrix(self, matrix):
-    #     # Convert rotation matrix to quaternion
-    #     q = np.empty((4,))
-    #     M = np.array(matrix, dtype=np.float64, copy=False)[:4, :4]
-    #     t = np.trace(M)
-        
-    #     if t > M[3, 3]:
-    #         q[0] = t
-    #         q[3] = M[1, 0] - M[0, 1]
-    #         q[2] = M[0, 2] - M[2, 0]
-    #         q[1] = M[2, 1] - M[1, 2]
-    #     else:
-    #         i, j, k = 0, 1, 2
-    #         if M[1, 1] > M[0, 0]:
-    #             i, j, k = 1, 2, 0
-    #         if M[2, 2] > M[i, i]:
-    #             i, j, k = 2, 0, 1
-    #         t = M[i, i] - (M[j, j] + M[k, k]) + M[3, 3]
-    #         q[i] = t
-    #         q[j] = M[i, j] + M[j, i]
-    #         q[k] = M[k, i] + M[i, k]
-    #         q[3] = M[k, j] - M[j, k]
-        
-    #     q *= 0.5 / np.sqrt(t * M[3, 3])
-    #     return q
