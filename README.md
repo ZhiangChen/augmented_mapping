@@ -223,8 +223,47 @@ To run the Docker container, use the following commands:
     make px4_sitl gz_x500
     ```
 
+    To run with your own model:
+    
+    ```bash
+    cd .gz
+    mkdir models
+    cd models
+    mkdir model_name
+    ```
+    
+    Run the commands above and place model.sdf, model.config, and meshes file.
 
-9. Finally, build and run the velocity control node:
+    Now run 
+
+    ```bash
+    cd PX4-Autopilot/Tool/simulation/gz/worlds
+    ```
+
+    and create a new world.config file under the directory that contains your new model.
+
+    Afterwards, 
+
+    ```bash
+    export GZ_SIM_RESOURCE_PATH="$pwd/.gz/models"
+    PX4_GZ_WORLD=model_name make px4_sitl gz_x500_depth
+    ```
+
+9. Install and run ROS-gazebo bridge 
+
+    ```bash
+    sudo apt-get install ros-humble-ros-gzgarden
+    ros2 run ros_gz_image image_bridge /camera /depth_camera
+    ```
+    
+    Replace with your version of ROS and Gazebo. Tested on ROS Humble and Gazebo Garden.
+
+10. Run ROS-Gazebo bridge for clock
+    ```bash
+    ros2 run ros_gz_bridge parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
+    ```
+
+11. Build and launch the perception node:
 
 
     ```bash
@@ -234,6 +273,22 @@ To run the Docker container, use the following commands:
     source /opt/ros/humble/setup.bash
     colcon build
     source install/local_setup.bash
+    ros2 launch perception perception_node
+    ```
+
+12. Build and run the velocity control node:
+
+
+    ```bash
+    cd ros2_ws
+    source /opt/ros/humble/setup.bash
+    colcon build
+    source install/local_setup.bash
     ros2 run velocity_control velocity_control_node
     ```
 
+## Issues
+
+### FUEL unable to find any frontiers
+
+If FUEL package fails with error "No coverable frontiers" when triggered, then modify parameters in file fuel_planner/exploration_manager/launch/exploration.launch. Box_min_x, box_min_y, Box_min_z, Box_max_x, Box_max_y, Box_max_z values need to be changed.
