@@ -287,6 +287,66 @@ To run the Docker container, use the following commands:
     ros2 run velocity_control velocity_control_node
     ```
 
+## Parameter Details
+
+### Map and Bounding Box
+
+- **Map Size**: Adjust `map_size_x`, `map_size_y`, and `map_size_z` to match your simulation environment's dimensions.
+- **Bounding Box**: Set `box_min_x`, `box_min_y`, `box_min_z`, `box_max_x`, `box_max_y`, and `box_max_z` to define the operational area within the map. Ensure these values are smaller than the map size to prevent errors.
+
+These parameters are located in `FUEL/fuel_planner/exploration_manager/launch/exploration.launch`.
+
+### Camera Calibration
+
+- **Camera Parameters**: Tune `Cx`, `Cy`, `Fx`, and `Fy` according to the X_500 depth camera specifications used in your Gazebo simulation to achieve accurate depth perception.
+
+Camera calibration settings can also be found in `FUEL/fuel_planner/exploration_manager/launch/exploration.launch`.
+
+### Motion Control
+
+- **Velocity and Acceleration**: Set `max_vel` and `max_acc` to 0.4 for steady and controlled UAV movement.
+
+The motion control parameters are located in `FUEL/fuel_planner/exploration_manager/launch/exploration.launch`.
+
+### Image Processing
+
+- **Depth Scaling Factor**: Use a `k_depth_scaling_factor` of 3431.15 in `Algorithm.xml` to scale pixel values accurately. Alternatively, a value of 1000.0 can be used.
+
+The `Algorithm.xml` file is located in `FUEL/fuel_planner/exploration_manager/launch`.
+
+### Yaw Control
+
+- **Yaw Acceleration (ydd_)**: Limit the yaw acceleration to avoid sudden changes.
+- **Optimization Weights (w_dir_)**: Increase this value to reduce sharp yaw changes.
+- **Relaxation Time**: Use a higher `relax_time` to achieve smoother yaw transitions.
+- **Position Trajectory Duration (yd_)**: Adjust to set the minimum duration for position trajectories.
+
+## Recommended Settings
+
+The following values have been determined to provide the best results for our simulation:
+
+- **exploration/yd**: 50
+- **exploration/ydd**: 55
+- **exploration/w_dir**: 2.5
+- **exploration/relax_time**: 2.0
+
+These settings help minimize abrupt yaw changes while maintaining efficient exploration times. Be cautious not to reduce yaw rates excessively, as this may lead to FUEL exploration failures.
+
+### PID Velocity Controllers 
+PID controllers are used to maintain precise control over the UAV's velocity in various directions. The parameters for these controllers are as follows: 
+- **PID for X-axis (self.pid_x = PID(2.0, 0.1, 0.0))**
+- **PID for Y-axis (self.pid_y = PID(0.8, 0.1, 0.0))**
+- **PID for Z-axis (self.pid_z = PID(0.8, 0.1, 0.0))**
+- **PID for Yaw (self.pid_yaw = PID(2.0, 0.1, 0.0))**
+
+#### Tuning Guidelines 
+- **Proportional (P)**: This term responds to the current error. Increasing the P value typically results in a faster response but can cause overshoot or oscillations if set too high. 
+- **Integral (I)**: This term responds to accumulated errors over time. It helps eliminate steady-state errors. If the I value is too high, it can cause the system to be slow or oscillate. 
+- **Derivative (D)**: This term responds to the rate of change of the error, providing a damping effect. It can help stabilize the system but may lead to instability if set too high. 
+
+Carefully tuning these parameters will help achieve smooth and accurate UAV operation in your Gazebo simulations. Adjust settings as needed to fit specific simulation requirements or environments.
+
+
 ## Issues
 
 ### FUEL unable to find any frontiers
