@@ -5,7 +5,6 @@ from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleLocalPositi
 from geometry_msgs.msg import Quaternion, PoseStamped, Pose
 from transforms3d.euler import euler2quat as quaternion_from_euler
 from quadrotor_msgs.msg import SO3Command
-# from simple_pid import PID
 from collections import deque
 from std_msgs.msg import Float32MultiArray
 import numpy as np
@@ -49,7 +48,7 @@ class VelocityControl(Node):
     """Node for controlling a vehicle in offboard mode using velocity control."""
 
     def __init__(self) -> None:
-        super().__init__('attitude_control')
+        super().__init__('velocity_manual_control')
 
         # Configure QoS profile for publishing and subscribing
         qos_profile = QoSProfile(
@@ -76,17 +75,15 @@ class VelocityControl(Node):
             Float32MultiArray, '/pos_vel_cmd', self.pos_vel_callback, 50)
 
         # Create PID controllers
-        self.pid_x = PID(2.0, 0.1, 0.0)
-        self.pid_y = PID(0.8, 0.1, 0.0)
-        self.pid_z = PID(0.8, 0.1, 0.0)
-        self.pid_yaw = PID(2.0, 0.1, 0.0)
-
+        self.pid_x = PID(2.2, 0.1, 0.0)
+        self.pid_y = PID(0.9, 0.1, 0.0)
+        self.pid_z = PID(0.9, 0.1, 0.0)
+        self.pid_yaw = PID(2.8, 0.1, 0.0)
 
         # Initialize variables
         self.offboard_setpoint_counter = 0
         self.vehicle_local_position = VehicleLocalPosition()
         self.vehicle_status = VehicleStatus()
-        self.takeoff_height = -10.0
         self.timer = self.create_timer(0.01, self.timer_callback)  # 100 Hz timer
         self.start_time = self.get_clock().now()
         self.last_time = self.start_time
@@ -114,8 +111,7 @@ class VelocityControl(Node):
         desired_pos_x = pv_msg.data[1]
         desired_pos_y = pv_msg.data[0]
         desired_pos_z = -pv_msg.data[2]
-        transformed_angle = -pv_msg.data[3] + 0.5 * np.pi
-        desired_yaw = self.normalize_angle(transformed_angle)
+        desired_yaw = -pv_msg.data[3]
 
         desired_vel_x = pv_msg.data[5]
         desired_vel_y = pv_msg.data[4]
@@ -125,20 +121,14 @@ class VelocityControl(Node):
         error_x = desired_pos_x - self.vehicle_local_position.x
         error_y = desired_pos_y - self.vehicle_local_position.y
         error_z = desired_pos_z - self.vehicle_local_position.z
-        actual_yaw = self.vehicle_local_position.heading
-
-        if (desired_yaw - self.vehicle_local_position.heading > math.pi):
-            desired_yaw -= 2 * math.pi
-        elif (desired_yaw - self.vehicle_local_position.heading < -math.pi):
-            actual_yaw -= 2 * math.pi
-        
-        error_yaw =  desired_yaw - actual_yaw
+        error_yaw = desired_yaw - self.vehicle_local_position.heading
         
 
         velocity_x = self.pid_x.update(self.vehicle_local_position.x, desired_pos_x, dt) + desired_vel_x
         velocity_y = self.pid_y.update(self.vehicle_local_position.y, desired_pos_y, dt) + desired_vel_y
         velocity_z = self.pid_z.update(self.vehicle_local_position.z, desired_pos_z, dt) + desired_vel_z
-        yaw_rate = self.pid_yaw.update(actual_yaw, desired_yaw, dt) + desired_yawdot
+        yaw_rate = self.pid_yaw.update(self.vehicle_local_position.heading, desired_yaw, dt) + desired_yawdot
+
         self.pos_vel = [velocity_x, velocity_y, velocity_z, yaw_rate]
 
     def arm(self):
@@ -208,59 +198,13 @@ class VelocityControl(Node):
         msg.position = [float('nan'), float('nan'), float('nan')]
         msg.acceleration = [float('nan'), float('nan'), float('nan')]
         msg.yaw = float('nan') 
-        # if self.takeoff == True:
-        #     if self.vehicle_local_position.z > -7.0:
-        #         if self.pos_vel is not None:
-        #             msg.velocity = [self.pos_vel[0], self.pos_vel[1], -5.0]
-        #             msg.yawspeed = 0.0
-        #         else:
-        #             msg.velocity = [0.0, 0.0, -5.0]
-        #             msg.yawspeed = 0.0
-        #     else:
-        #         self.takeoff = False
-        #         if self.pos_vel is not None:
-        #             msg.velocity = [self.pos_vel[0], self.pos_vel[1], 0.0]
-        #             msg.yawspeed = yaw_rate
-        #         else:
-        #             self.get_logger().info("Reached 5 meters")
-        #             msg.velocity = [0.0, 0.0, 0.0]
-        #             msg.yawspeed = 0.0
-        # else:
-        #     if self.pos_vel is not None:
-        #         msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
-        #         msg.yawspeed = self.pos_vel[3]
-        #     else:
-        #         current_time = self.get_clock().now()
-        #         elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
-        #         if (elapsed_time < self.move_duration):
-        #             msg.velocity = [2.7, 5.0, 0.0]
-        #             msg.yawspeed = 0.0
-        #         else:
-        #             msg.velocity = [0.0, 0.0, 0.0]
-        #             msg.yawspeed = 0.0
 
-        current_time = self.get_clock().now()
-        elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
-
-        if self.takeoff == True:
-            if self.vehicle_local_position.z > -7.0:
-                msg.velocity = [0.0, 0.0, -5.0]
-                msg.yawspeed = 0.0
-            else:
-                self.takeoff = False
-                self.get_logger().info("Reached 5 meters")
-                
-        else if (elapsed_time < self.move_duration):
-            msg.velocity = [2.7, 5.0, 0.0]
-            msg.yawspeed = 0.0
-
+        if self.pos_vel is not None:
+            msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
+            msg.yawspeed = self.pos_vel[3]
         else:
-            if self.pos_vel is not None:
-                msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
-                msg.yawspeed = self.pos_vel[3]
-            else:
-                msg.velocity = [0.0, 0.0, 0.0]
-                msg.yawspeed = 0.0
+            msg.velocity = [0.0, 0.0, 0.0]
+            msg.yawspeed = 0.0
 
         self.trajectory_setpoint_publisher.publish(msg)
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)

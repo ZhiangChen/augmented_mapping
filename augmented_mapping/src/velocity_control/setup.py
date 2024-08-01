@@ -20,7 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'velocity_control_node = velocity_control.velocity_control:main'
+            'velocity_control_node = velocity_control.velocity_control:main',
+            'velocity_manual_node = velocity_control.velocity_manual_control:main',
+            'velocity_fuel_node = velocity_control.velocity_fuel_control:main',
         ],
     },
 )

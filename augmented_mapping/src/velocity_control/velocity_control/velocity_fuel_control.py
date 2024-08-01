@@ -5,10 +5,10 @@ from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleLocalPositi
 from geometry_msgs.msg import Quaternion, PoseStamped, Pose
 from transforms3d.euler import euler2quat as quaternion_from_euler
 from quadrotor_msgs.msg import SO3Command
-# from simple_pid import PID
 from collections import deque
 from std_msgs.msg import Float32MultiArray
 import numpy as np
+import math
 
 class PID:
     def __init__(self, Kp, Ki, Kd, integral_window_size=500):
@@ -49,7 +49,7 @@ class VelocityControl(Node):
     """Node for controlling a vehicle in offboard mode using velocity control."""
 
     def __init__(self) -> None:
-        super().__init__('attitude_control')
+        super().__init__('velocity_manual_control')
 
         # Configure QoS profile for publishing and subscribing
         qos_profile = QoSProfile(
@@ -76,17 +76,16 @@ class VelocityControl(Node):
             Float32MultiArray, '/pos_vel_cmd', self.pos_vel_callback, 50)
 
         # Create PID controllers
-        self.pid_x = PID(2.0, 0.1, 0.0)
-        self.pid_y = PID(0.8, 0.1, 0.0)
-        self.pid_z = PID(0.8, 0.1, 0.0)
-        self.pid_yaw = PID(2.0, 0.1, 0.0)
+        self.pid_x = PID(2.2, 0.1, 0.0)
+        self.pid_y = PID(0.9, 0.1, 0.0)
+        self.pid_z = PID(0.9, 0.1, 0.0)
+        self.pid_yaw = PID(2.8, 0.1, 0.0)
 
 
         # Initialize variables
         self.offboard_setpoint_counter = 0
         self.vehicle_local_position = VehicleLocalPosition()
         self.vehicle_status = VehicleStatus()
-        self.takeoff_height = -10.0
         self.timer = self.create_timer(0.01, self.timer_callback)  # 100 Hz timer
         self.start_time = self.get_clock().now()
         self.last_time = self.start_time
@@ -94,7 +93,6 @@ class VelocityControl(Node):
         self.takeoff = True
 
         self.arm_status = False
-
 
     def vehicle_local_position_callback(self, vehicle_local_position):
         """Callback function for vehicle_local_position topic subscriber."""
@@ -104,6 +102,13 @@ class VelocityControl(Node):
     def vehicle_status_callback(self, vehicle_status):
         """Callback function for vehicle_status topic subscriber."""
         self.vehicle_status = vehicle_status
+
+    def normalize_angle(self, angle):
+        """ Normalize an angle to the range [-π, π) """
+        if angle >= np.pi:
+            angle -= 2 * np.pi  # Shift to [-π, π)
+        return angle
+
 
     def pos_vel_callback(self, pv_msg):
         """Callback function for vehicle_status topic subscriber."""
@@ -134,7 +139,6 @@ class VelocityControl(Node):
         
         error_yaw =  desired_yaw - actual_yaw
         
-
         velocity_x = self.pid_x.update(self.vehicle_local_position.x, desired_pos_x, dt) + desired_vel_x
         velocity_y = self.pid_y.update(self.vehicle_local_position.y, desired_pos_y, dt) + desired_vel_y
         velocity_z = self.pid_z.update(self.vehicle_local_position.z, desired_pos_z, dt) + desired_vel_z
@@ -147,7 +151,7 @@ class VelocityControl(Node):
             VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
         self.get_logger().info('Arm command sent')
 
-    def disarm(self):
+    def disarm(self):           
         """Send a disarm command to the vehicle."""
         self.publish_vehicle_command(
             VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=0.0)
@@ -160,7 +164,7 @@ class VelocityControl(Node):
         self.get_logger().info("Switching to offboard mode")
 
     def land(self):
-        """Switch to land mode."""
+        """Switch to land mode."""           
         self.publish_vehicle_command(VehicleCommand.VEHICLE_CMD_NAV_LAND)
         self.get_logger().info("Switching to land mode")
 
@@ -208,62 +212,25 @@ class VelocityControl(Node):
         msg.position = [float('nan'), float('nan'), float('nan')]
         msg.acceleration = [float('nan'), float('nan'), float('nan')]
         msg.yaw = float('nan') 
-        # if self.takeoff == True:
-        #     if self.vehicle_local_position.z > -7.0:
-        #         if self.pos_vel is not None:
-        #             msg.velocity = [self.pos_vel[0], self.pos_vel[1], -5.0]
-        #             msg.yawspeed = 0.0
-        #         else:
-        #             msg.velocity = [0.0, 0.0, -5.0]
-        #             msg.yawspeed = 0.0
-        #     else:
-        #         self.takeoff = False
-        #         if self.pos_vel is not None:
-        #             msg.velocity = [self.pos_vel[0], self.pos_vel[1], 0.0]
-        #             msg.yawspeed = yaw_rate
-        #         else:
-        #             self.get_logger().info("Reached 5 meters")
-        #             msg.velocity = [0.0, 0.0, 0.0]
-        #             msg.yawspeed = 0.0
-        # else:
-        #     if self.pos_vel is not None:
-        #         msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
-        #         msg.yawspeed = self.pos_vel[3]
-        #     else:
-        #         current_time = self.get_clock().now()
-        #         elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
-        #         if (elapsed_time < self.move_duration):
-        #             msg.velocity = [2.7, 5.0, 0.0]
-        #             msg.yawspeed = 0.0
-        #         else:
-        #             msg.velocity = [0.0, 0.0, 0.0]
-        #             msg.yawspeed = 0.0
-
-        current_time = self.get_clock().now()
-        elapsed_time = (current_time - self.start_time).nanoseconds / 1e9
 
         if self.takeoff == True:
-            if self.vehicle_local_position.z > -7.0:
-                msg.velocity = [0.0, 0.0, -5.0]
+            if self.vehicle_local_position.z > -4.0:
+                msg.velocity = [-0.0, 0.0, -1.0]
                 msg.yawspeed = 0.0
             else:
                 self.takeoff = False
-                self.get_logger().info("Reached 5 meters")
-                
-        else if (elapsed_time < self.move_duration):
-            msg.velocity = [2.7, 5.0, 0.0]
-            msg.yawspeed = 0.0
-
+                self.get_logger().info("Reached 4 meters")
         else:
             if self.pos_vel is not None:
+                # self.get_logger().info("pos vel is not none")
                 msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
                 msg.yawspeed = self.pos_vel[3]
             else:
                 msg.velocity = [0.0, 0.0, 0.0]
                 msg.yawspeed = 0.0
 
-        self.trajectory_setpoint_publisher.publish(msg)
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
+        self.trajectory_setpoint_publisher.publish(msg)
 
 def main(args=None) -> None:
     print('Starting offboard control node...')
@@ -272,5 +239,6 @@ def main(args=None) -> None:
     rclpy.spin(velocity_control)
     velocity_control.destroy_node()
     rclpy.shutdown()
+
 if __name__ == '__main__':
     main()
