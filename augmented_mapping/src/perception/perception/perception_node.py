@@ -8,35 +8,16 @@ from nav_msgs.msg import Odometry
 from transforms3d.euler import euler2quat as quaternion_from_euler
 from collections import deque
 import transformations as tf
-# import scipy.spatial.transform as stf
 import numpy as np
 
-# Pose of StereoOV7251 sensor relative to OakD-Lite frame
-T_camera_world = np.array([
-   [1, 0, 0, 0.012],
-   [0, 1, 0, 0.03],
-   [0, 0, 1, 0.242],
-   [0, 0, 0, 1]
-])
-
-# Pose of OakD-Lite frame relative to x500_depth frame
-T_uav_world = np.array([
-   [1, 0, 0, 0],
-   [0, 1, 0, 0],
-   [0, 0, 1, 0.24],
-   [0, 0, 0, 1]
-])
-
-
-T_uav_world_inv = np.linalg.inv(T_uav_world)
-
 class Perception(Node):
-    """Node for controlling a vehicle in offboard mode using velocity control."""
+    """
+    Node for receiving UAV odometry from Gazebo simulation and
+    publishing UAV data to fuel exploration simulation
+    """
 
     def __init__(self) -> None:
         super().__init__('perception_node')
-
-        # self.declare_parameter('use_sim_time', True)
 
         # Configure QoS profile for publishing and subscribing
         qos_profile = QoSProfile(
@@ -51,16 +32,16 @@ class Perception(Node):
             Odometry, '/vehicle/odometry', qos_profile)
         self.sensor_pose_publisher = self.create_publisher(
             PoseStamped, '/vehicle/sensor_pose', qos_profile)
+        self.orig_pose_publisher = self.create_publisher(
+            PoseStamped, '/vehicle/original_pose', qos_profile)
 
         # Create subscribers
         self.vehicle_odometry_subscriber = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry', self.vehicle_odometry_callback, qos_profile)
 
         # Initialize variables
-        self.T_cam_uav = np.matmul(T_uav_world_inv, T_camera_world)
         self.offboard_setpoint_counter = 0
         self.vehicle_odometry = VehicleOdometry()
-        self.timer = self.create_timer(0.01, self.timer_callback)  # 100 Hz timer
         self.altitude = -5.0  # Target altitude in meters
         self.start_time = self.get_clock().now()
         self.last_time = self.start_time
@@ -68,17 +49,101 @@ class Perception(Node):
     def vehicle_odometry_callback(self, vehicle_odometry):
         """Callback function for vehicle_local_position topic subscriber."""
         self.vehicle_odometry = vehicle_odometry
+        odom = Odometry()
+
+        # Header
+        odom.header = Header()
+        odom.header.stamp = self.get_clock().now().to_msg()
+        odom.header.frame_id = 'world'
+        odom.child_frame_id = ''
+
+        position = self.vehicle_odometry.position
+        # Quanternion in w, x, y, z
+        quaternion = [self.vehicle_odometry.q[0], self.vehicle_odometry.q[1], self.vehicle_odometry.q[2], self.vehicle_odometry.q[3]]
+
+        t_matrix = self.pose_to_transform(position, quaternion)
+        t_matrix_ENU = self.ned_to_enu(t_matrix)
+
+        new_quaternion = self.transform_to_quaternion(t_matrix_ENU)
+        new_position = t_matrix_ENU[:3, 3]
+
+        # Pose
+        odom.pose.pose = Pose()
+        odom.pose.pose.position.x = float(new_position[0])
+        odom.pose.pose.position.y = float(new_position[1])
+        odom.pose.pose.position.z = float(new_position[2])
+
+        odom.pose.pose.orientation.x = float(new_quaternion[1])
+        odom.pose.pose.orientation.y = float(new_quaternion[2])
+        odom.pose.pose.orientation.z = float(new_quaternion[3])
+        odom.pose.pose.orientation.w = float(new_quaternion[0])
+
+        # Twist
+        odom.twist.twist = Twist()
+        odom.twist.twist.linear.x = float(self.vehicle_odometry.velocity[1])
+        odom.twist.twist.linear.y = float(self.vehicle_odometry.velocity[0])
+        odom.twist.twist.linear.z = -float(self.vehicle_odometry.velocity[2])
+        odom.twist.twist.angular.x = float(self.vehicle_odometry.angular_velocity[1])
+        odom.twist.twist.angular.y = float(self.vehicle_odometry.angular_velocity[0])
+        odom.twist.twist.angular.z = -float(self.vehicle_odometry.angular_velocity[2])
+
+        # Camera position offset with respect to UAV positon
+        camera_offset = [0.15, 0.03, 0.002]
+
+        camera_offset_T = np.eye(4)
+        camera_offset_T[:3, 3] = camera_offset
+
+        # Camera rotation
+        camera_rotation = np.array([[0, 0, 1,0 ], [-1, 0, 0, 0], [0, -1, 0, 0], [0,0,0,1]])
+        camera_offset_T[:3, :3] = camera_rotation[:3, :3]
+
+        # Camera rotation matrix in ENU coordinates
+        T_camera_ENU = np.matmul(t_matrix_ENU, camera_offset_T)
+
+        cam_position = T_camera_ENU[:3, 3]
+        cam_orientation = self.transform_to_quaternion(T_camera_ENU)
+
+        # Create a PoseStamped message
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.frame_id = "world"  # Adjust frame_id as per your setup
+        pose_msg.pose.position.x = cam_position[0]
+        pose_msg.pose.position.y = cam_position[1]
+        pose_msg.pose.position.z = cam_position[2]
+        pose_msg.pose.orientation.x = cam_orientation[1]
+        pose_msg.pose.orientation.y = cam_orientation[2]
+        pose_msg.pose.orientation.z = cam_orientation[3]
+        pose_msg.pose.orientation.w = cam_orientation[0]
+
+        orig_pose = PoseStamped()
+
+        orig_pose.header.stamp = self.get_clock().now().to_msg()
+        orig_pose.header.frame_id = "world"  # Adjust frame_id as per your setup
+        orig_pose.pose.position.x = float(self.vehicle_odometry.position[0])
+        orig_pose.pose.position.y = float(self.vehicle_odometry.position[1])
+        orig_pose.pose.position.z = float(self.vehicle_odometry.position[2])
+
+        orig_pose.pose.orientation.x = float(self.vehicle_odometry.q[1])
+        orig_pose.pose.orientation.y = float(self.vehicle_odometry.q[2])
+        orig_pose.pose.orientation.z = float(self.vehicle_odometry.q[3])
+        orig_pose.pose.orientation.w = float(self.vehicle_odometry.q[0])
+
+        self.odometry_topic_publisher.publish(odom)
+        self.orig_pose_publisher.publish(orig_pose)
+        self.sensor_pose_publisher.publish(pose_msg)
                 
     def vehicle_status_callback(self, vehicle_status):
         """Callback function for vehicle_status topic subscriber."""
         self.vehicle_status = vehicle_status
 
     def ned_to_enu(self, T_ned):
-        T = np.array([[0, 1, 0, 0],
+        """Converts translation matrix in NED to ENU frame"""
+        T2 = np.array([[0, 1, 0, 0],
                         [1, 0, 0, 0],
                         [0, 0, -1, 0],
                         [0, 0, 0, 1]])
-        return np.matmul(T, T_ned)
+        T1 = np.array([[1, 0, 0,0 ], [0, -1, 0, 0], [0, 0, -1, 0], [0,0,0,1]])
+        return np.matmul(np.matmul(T2, T_ned), T1)
 
 
     def pose_to_transform(self, position, quaternion):
@@ -104,79 +169,6 @@ class Perception(Node):
         """
         quaternion = tf.quaternion_from_matrix(transform_matrix)
         return quaternion
-
-
-    # Create the transformation matrix
-    def timer_callback(self) -> None:
-        """Callback function for the timer."""
-
-        odom = Odometry()
-
-        # Header
-        odom.header = Header()
-        odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = '/simulator'
-        odom.child_frame_id = ''
-
-        position = self.vehicle_odometry.position
-        # Quanternion in x,y,z,w
-        quaternion = [self.vehicle_odometry.q[3], self.vehicle_odometry.q[0], self.vehicle_odometry.q[1], self.vehicle_odometry.q[2]]
-
-        t_matrix = self.pose_to_transform(position, quaternion)
-        t_matrix_ENU = self.ned_to_enu(t_matrix)
-
-        new_quaternion = self.transform_to_quaternion(t_matrix_ENU)
-        new_position = t_matrix_ENU[:3, 3]
-
-        # Pose
-        odom.pose.pose = Pose()
-        odom.pose.pose.position.x = float(new_position[0])
-        odom.pose.pose.position.y = float(new_position[1])
-        odom.pose.pose.position.z = float(new_position[2])
-
-        odom.pose.pose.orientation.x = float(new_quaternion[0])
-        odom.pose.pose.orientation.y = float(new_quaternion[1])
-        odom.pose.pose.orientation.z = float(new_quaternion[2])
-        odom.pose.pose.orientation.w = float(new_quaternion[3])
-
-        # Twist
-        odom.twist.twist = Twist()
-        odom.twist.twist.linear.x = float(self.vehicle_odometry.velocity[1])
-        odom.twist.twist.linear.y = float(self.vehicle_odometry.velocity[0])
-        odom.twist.twist.linear.z = -float(self.vehicle_odometry.velocity[2])
-        odom.twist.twist.angular.x = -float(self.vehicle_odometry.angular_velocity[1])
-        odom.twist.twist.angular.y = float(self.vehicle_odometry.angular_velocity[0])
-        odom.twist.twist.angular.z = float(self.vehicle_odometry.angular_velocity[2])
-
-        camera_offset = [0.15, 0.03, 0.002]
-
-        camera_offset_T = np.eye(4)
-        camera_offset_T[:3, 3] = camera_offset
-
-        # self.get_logger().info(str(t_matrix_ENU))
-
-        T_camera_ENU = np.matmul(camera_offset_T, t_matrix_ENU)
-
-        cam_position = T_camera_ENU[:3, 3]
-        cam_orientation = self.transform_to_quaternion(T_camera_ENU)
-
-        # Create a PoseStamped message
-        pose_msg = PoseStamped()
-        pose_msg.header.stamp = self.get_clock().now().to_msg()
-        pose_msg.header.frame_id = "world"  # Adjust frame_id as per your setup
-        pose_msg.pose.position.x = cam_position[0]
-        pose_msg.pose.position.y = cam_position[1]
-        pose_msg.pose.position.z = cam_position[2]
-        pose_msg.pose.orientation.x = cam_orientation[0]
-        pose_msg.pose.orientation.y = cam_orientation[1]
-        pose_msg.pose.orientation.z = cam_orientation[2]
-        pose_msg.pose.orientation.w = cam_orientation[3]
-
-        self.odometry_topic_publisher.publish(odom)
-        self.sensor_pose_publisher.publish(pose_msg)
-
-        # self.get_logger().info("odom " + str(new_quaternion))
-        # self.get_logger().info("sensor " + str(cam_orientation))
 
 def main(args=None) -> None:
     print('Starting offboard control node...')
