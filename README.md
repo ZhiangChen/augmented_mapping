@@ -287,6 +287,25 @@ To run the Docker container, use the following commands:
     ros2 run velocity_control velocity_control_node
     ```
 
+13. Run rtabmap:
+
+    ```bash
+    sudo apt update
+    sudo apt install ros-humble-rtabmap
+    ```
+
+    ```bash
+    ros2 launch rtabmap_launch rtabmap.launch.py \
+    frame_id:=x500_depth_0/OakD-Lite/base_link/IMX214 \
+    args:="-d" \
+    use_sim_time:=true \
+    rgb_topic:=/camera \
+    depth_topic:=/depth_camera \
+    camera_info_topic:=/camera_info \
+    approx_sync:=true \
+    qos:=2
+    ```
+
 ## Parameter Details
 
 ### Map and Bounding Box
