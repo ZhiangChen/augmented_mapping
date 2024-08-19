@@ -142,8 +142,29 @@ To build the Docker image for this project, follow these steps:
     sudo docker build -t your_image_name .
     ```
 
+## Training and Running YOLOv7 Model
 
-## Running the FUEL Example
+### Training YOLOv7 Model
+
+Follow instructions on YOLOv7 Github page: https://github.com/WongKinYiu/yolov7
+
+### Running YOLOv7 Model
+
+To run YOLOv7 ROS node, first make a new workspace and copy contents of yolov7_ws:
+    ```bash
+    cd
+    mkdir yolov7_ws
+    cp -r augmented_mapping/augmented_mapping/yolov7_ws/ yolov7_ws
+    ```
+
+Next, launch yolov7:
+    ```bash
+    ros2 launch yolov7_ros yolov7.launch
+    ```
+
+Parameters can be modified in launch/yolov7.launch file.
+
+## Running the FUEL-Based Exploration Algorithm
 
 
 To run the Docker container, use the following commands:
@@ -312,6 +333,7 @@ To run the Docker container, use the following commands:
 
 - **Map Size**: Adjust `map_size_x`, `map_size_y`, and `map_size_z` to match your simulation environment's dimensions.
 - **Bounding Box**: Set `box_min_x`, `box_min_y`, `box_min_z`, `box_max_x`, `box_max_y`, and `box_max_z` to define the operational area within the map. Ensure these values are smaller than the map size to prevent errors.
+- **Note about bounding box**: UAV will only explore the space defined by the bouding box. It is recommended that the map size is set much larger than the bounding box, as setting the map size close to bounding box often results in errors.
 
 These parameters are located in `FUEL/fuel_planner/exploration_manager/launch/exploration.launch`.
 

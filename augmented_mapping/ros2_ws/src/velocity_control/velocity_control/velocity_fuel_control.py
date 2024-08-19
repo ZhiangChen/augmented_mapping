@@ -242,12 +242,15 @@ class VelocityControl(Node):
                 self.get_logger().info("Reached 4 meters " + str(self.vehicle_local_position.z))
                 empty = PoseStamped()
                 self.goal_publisher.publish(empty)
+                self.get_logger().info("Published trigger")
         else:
             if self.pos_vel is not None:
                 # self.get_logger().info("pos vel is not none")
                 msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
                 msg.yawspeed = self.pos_vel[3]
             else:
+                self.goal_publisher.publish(empty)
+                self.get_logger().info("Published trigger")
                 if self.vehicle_local_position.z > -2.5:
                     msg.velocity = [0.0, 0.0, -0.2]
                 else:

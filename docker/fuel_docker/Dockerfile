@@ -58,7 +58,7 @@ RUN git clone https://github.com/stevengj/nlopt.git /root/nlopt && \
 RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && \
     mkdir -p /root/catkin_ws/src && \
     cd /root/catkin_ws/src && \
-    git clone -b fuel_demo_param https://github.com/yunhajo/FUEL.git"
+    git clone -b map_boundary https://github.com/yunhajo/FUEL.git"
     # git clone https://github.com/aaryanmurgunde/Inspection-with-PX.git"
 
 # COPY ../../../FUEL_PX4 /root/catkin_ws/src
