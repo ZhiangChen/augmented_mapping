@@ -6,15 +6,13 @@ from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3, PoseStamp
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
 from transforms3d.euler import euler2quat as quaternion_from_euler
+from sensor_msgs.msg import CameraInfo, Image, RegionOfInterest
 from collections import deque
 import transformations as tf
 import numpy as np
 
 class Perception(Node):
-    """
-    Node for receiving UAV odometry from Gazebo simulation and
-    publishing UAV data to fuel exploration simulation
-    """
+    """Node for controlling a vehicle in offboard mode using velocity control."""
 
     def __init__(self) -> None:
         super().__init__('perception_node')
@@ -29,15 +27,20 @@ class Perception(Node):
 
         # Create publishers
         self.odometry_topic_publisher = self.create_publisher(
-            Odometry, '/vehicle/odometry', qos_profile)
+            Odometry, '/vehicle/odometry', 1)
         self.sensor_pose_publisher = self.create_publisher(
-            PoseStamped, '/vehicle/sensor_pose', qos_profile)
+            PoseStamped, '/vehicle/sensor_pose', 1)
         self.orig_pose_publisher = self.create_publisher(
-            PoseStamped, '/vehicle/original_pose', qos_profile)
+            PoseStamped, '/vehicle/original_pose', 1)
+        self.camera_info_publisher = self.create_publisher(
+            CameraInfo, '/camera_info', 1)
 
         # Create subscribers
         self.vehicle_odometry_subscriber = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry', self.vehicle_odometry_callback, qos_profile)
+
+        self.image_subscriber = self.create_subscription(
+            Image, '/camera', self.camera_callback, 1)
 
         # Initialize variables
         self.offboard_setpoint_counter = 0
@@ -54,10 +57,10 @@ class Perception(Node):
         # Header
         odom.header = Header()
         odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = 'world'
-        odom.child_frame_id = ''
+        odom.header.frame_id = 'base_link'
+        odom.child_frame_id = 'odom'
 
-        position = self.vehicle_odometry.position
+        position = [self.vehicle_odometry.position[0], self.vehicle_odometry.position[1], self.vehicle_odometry.position[2] + 1.5]
         # Quanternion in w, x, y, z
         quaternion = [self.vehicle_odometry.q[0], self.vehicle_odometry.q[1], self.vehicle_odometry.q[2], self.vehicle_odometry.q[3]]
 
@@ -87,17 +90,16 @@ class Perception(Node):
         odom.twist.twist.angular.y = float(self.vehicle_odometry.angular_velocity[0])
         odom.twist.twist.angular.z = -float(self.vehicle_odometry.angular_velocity[2])
 
-        # Camera position offset with respect to UAV positon
         camera_offset = [0.15, 0.03, 0.002]
 
         camera_offset_T = np.eye(4)
         camera_offset_T[:3, 3] = camera_offset
-
         # Camera rotation
         camera_rotation = np.array([[0, 0, 1,0 ], [-1, 0, 0, 0], [0, -1, 0, 0], [0,0,0,1]])
         camera_offset_T[:3, :3] = camera_rotation[:3, :3]
 
-        # Camera rotation matrix in ENU coordinates
+        # self.get_logger().info(str(t_matrix_ENU))
+
         T_camera_ENU = np.matmul(t_matrix_ENU, camera_offset_T)
 
         cam_position = T_camera_ENU[:3, 3]
@@ -131,19 +133,47 @@ class Perception(Node):
         self.odometry_topic_publisher.publish(odom)
         self.orig_pose_publisher.publish(orig_pose)
         self.sensor_pose_publisher.publish(pose_msg)
+
+    def camera_callback(self, image):
+        cam_info = CameraInfo()
+
+        cam_info.header = image.header
+        cam_info.height = 480
+        cam_info.width = 640
+        cam_info.distortion_model = "plumb_bob"
+
+        cam_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+        cam_info.k = [465.7411193847656, 0.0, 320.0, 0.0, 465.7411766052246, 240.0, 0.0, 0.0, 1.0]
+        cam_info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        cam_info.p = [465.7411193847656, 0.0, 320.0, 0.0, 0.0, 465.7411766052246, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        
+        cam_info.binning_x = 0
+        cam_info.binning_y = 0
+
+        cam_info.roi = RegionOfInterest()
+
+        cam_info.roi.x_offset = 0
+        cam_info.roi.y_offset = 0 
+        cam_info.roi.height = 0
+        cam_info.roi.width = 0
+        cam_info.roi.do_rectify = False
+
+        self.camera_info_publisher.publish(cam_info)
+
+
                 
     def vehicle_status_callback(self, vehicle_status):
         """Callback function for vehicle_status topic subscriber."""
         self.vehicle_status = vehicle_status
 
     def ned_to_enu(self, T_ned):
-        """Converts translation matrix in NED to ENU frame"""
         T2 = np.array([[0, 1, 0, 0],
                         [1, 0, 0, 0],
                         [0, 0, -1, 0],
                         [0, 0, 0, 1]])
         T1 = np.array([[1, 0, 0,0 ], [0, -1, 0, 0], [0, 0, -1, 0], [0,0,0,1]])
         return np.matmul(np.matmul(T2, T_ned), T1)
+        # return np.matmul(T2, T_ned)
 
 
     def pose_to_transform(self, position, quaternion):

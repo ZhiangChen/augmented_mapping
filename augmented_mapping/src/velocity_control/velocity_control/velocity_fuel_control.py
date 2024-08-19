@@ -66,6 +66,9 @@ class VelocityControl(Node):
             TrajectorySetpoint, '/fmu/in/trajectory_setpoint', qos_profile)
         self.vehicle_command_publisher = self.create_publisher(
             VehicleCommand, '/fmu/in/vehicle_command', qos_profile)
+        self.goal_publisher = self.create_publisher(
+            PoseStamped, '/start_fuel', qos_profile
+        )
 
         # Create subscribers
         self.vehicle_local_position_subscriber = self.create_subscription(
@@ -86,13 +89,21 @@ class VelocityControl(Node):
         self.offboard_setpoint_counter = 0
         self.vehicle_local_position = VehicleLocalPosition()
         self.vehicle_status = VehicleStatus()
+        self.takeoff_height = -10.0
         self.timer = self.create_timer(0.01, self.timer_callback)  # 100 Hz timer
+        self.altitude = -15.0  # Target altitude in meters
+        self.takeoff_duration = 5.0
+        self.move_duration = 10.5
+        self.hover_thrust = 0.79  
+        self.pitch_angle = -0.05  
+        self.roll_angle = -0.15  
         self.start_time = self.get_clock().now()
         self.last_time = self.start_time
         self.pos_vel = None
         self.takeoff = True
 
         self.arm_status = False
+
 
     def vehicle_local_position_callback(self, vehicle_local_position):
         """Callback function for vehicle_local_position topic subscriber."""
@@ -118,7 +129,8 @@ class VelocityControl(Node):
 
         desired_pos_x = pv_msg.data[1]
         desired_pos_y = pv_msg.data[0]
-        desired_pos_z = -pv_msg.data[2]
+        # desired_pos_z = -pv_msg.data[2] - 4.0
+        desired_pos_z = -pv_msg.data[2] -1.5
         transformed_angle = -pv_msg.data[3] + 0.5 * np.pi
         desired_yaw = self.normalize_angle(transformed_angle)
 
@@ -139,10 +151,18 @@ class VelocityControl(Node):
         
         error_yaw =  desired_yaw - actual_yaw
         
+
         velocity_x = self.pid_x.update(self.vehicle_local_position.x, desired_pos_x, dt) + desired_vel_x
         velocity_y = self.pid_y.update(self.vehicle_local_position.y, desired_pos_y, dt) + desired_vel_y
         velocity_z = self.pid_z.update(self.vehicle_local_position.z, desired_pos_z, dt) + desired_vel_z
         yaw_rate = self.pid_yaw.update(actual_yaw, desired_yaw, dt) + desired_yawdot
+        # yaw_rate = self.normalize_angle(yaw_rate)
+        # self.get_logger().info(str(yaw_rate) + " " + str(desired_yaw) + " " + str(actual_yaw) + " " + str(pv_msg.data[3]))
+        # self.get_logger().info("New callback")
+        # self.get_logger().info(str(desired_pos_x) + " " + str(self.vehicle_local_position.x))
+        # self.get_logger().info(str(desired_pos_y) + " " + str(self.vehicle_local_position.y))
+        # self.get_logger().info(str(desired_pos_z) + " " + str(self.vehicle_local_position.z))
+        # self.get_logger().info(str(desired_yaw) + " " + str(actual_yaw))
         self.pos_vel = [velocity_x, velocity_y, velocity_z, yaw_rate]
 
     def arm(self):
@@ -214,20 +234,28 @@ class VelocityControl(Node):
         msg.yaw = float('nan') 
 
         if self.takeoff == True:
-            if self.vehicle_local_position.z > -4.0:
-                msg.velocity = [-0.0, 0.0, -1.0]
+            if self.vehicle_local_position.z > -2.5:
+                msg.velocity = [0.0, 0.0, -1.0]
                 msg.yawspeed = 0.0
             else:
                 self.takeoff = False
-                self.get_logger().info("Reached 4 meters")
+                self.get_logger().info("Reached 4 meters " + str(self.vehicle_local_position.z))
+                empty = PoseStamped()
+                self.goal_publisher.publish(empty)
+                self.get_logger().info("Published trigger")
         else:
             if self.pos_vel is not None:
                 # self.get_logger().info("pos vel is not none")
                 msg.velocity = [self.pos_vel[0], self.pos_vel[1], self.pos_vel[2]]
                 msg.yawspeed = self.pos_vel[3]
             else:
-                msg.velocity = [0.0, 0.0, 0.0]
-                msg.yawspeed = 0.0
+                self.goal_publisher.publish(empty)
+                self.get_logger().info("Published trigger")
+                if self.vehicle_local_position.z > -2.5:
+                    msg.velocity = [0.0, 0.0, -0.2]
+                else:
+                    msg.velocity = [0.0, 0.0, 0.0]
+                    msg.yawspeed = 0.0
 
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.trajectory_setpoint_publisher.publish(msg)
