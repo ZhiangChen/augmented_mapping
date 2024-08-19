@@ -152,10 +152,10 @@ Follow instructions on YOLOv7 Github page: https://github.com/WongKinYiu/yolov7
 
 To run YOLOv7 ROS node, first make a new workspace and copy contents of yolov7_ws:
     ```bash
-    cd
-    mkdir yolov7_ws
-    cd yolov7_ws
-    git clone https://github.com/yunhajo03/yolov7-ros.git
+    cd \
+    mkdir yolov7_ws \
+    cd yolov7_ws \
+    git clone https://github.com/yunhajo03/yolov7-ros.git \
     ```
 
 Next, launch yolov7:
