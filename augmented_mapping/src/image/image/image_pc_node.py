@@ -38,6 +38,7 @@ class DepthToPointCloud(Node):
         
         # PointCloud2 publisher
         self.pointcloud_pub = self.create_publisher(PointCloud2, '/depth_camera/pointcloud', 10)
+        self.position_pub = self.create_publisher(PoseStamped, '/target_pos', 10)
 
 
         self.fx = 432.4960
@@ -90,7 +91,7 @@ class DepthToPointCloud(Node):
         self.depth_image_ = cv_ptr
 
         # convert depth image to point cloud using depth image, camera intrinsics, camera pose, and scaling factor
-        # get z values from depth image
+        # get z values from depth imageqos_profile
         z_values = cv_ptr.flatten()
 
         # get x, y values from pixel coordinates
@@ -124,7 +125,7 @@ class DepthToPointCloud(Node):
 
     def pose_to_transform(self, position, quaternion):
         """
-        Convert position and quaternion to a 4x4 transformation matrix.
+        Convert position and quaternion to a 4x4 transformation matrix.qos_profile
 
         :param position: A list or array of x, y, z coordinates.
         :param quaternion: A list or array of x, y, z, w quaternion components.
@@ -182,6 +183,13 @@ class DepthToPointCloud(Node):
 
                     center_coordinates = point_bbox[center_row, center_col]
                     self.get_logger().info(str(center_coordinates))
+                    
+                    position_msg = PoseStamped()
+                    position_msg.pose.position.x = center_coordinates[1]
+                    position_msg.pose.position.y = center_coordinates[0]
+                    position_msg.pose.position.z = center_coordinates[2]
+
+                    self.position_pub.publish(position_msg)
 
                     self.point_cloud_pub = point_bbox
                     self.publish_depth()
