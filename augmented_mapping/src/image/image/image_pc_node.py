@@ -14,6 +14,9 @@ from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
 import transformations as tf
 
+# import boxing box ros message
+from vision_msgs.msg import BoundingBox2D, Detection2DArray, Detection2D
+
 
 
 class DepthToPointCloud(Node):
@@ -26,6 +29,8 @@ class DepthToPointCloud(Node):
         self.depth_sub = Subscriber(self, Image, '/depth_camera') 
         self.pose_sub = Subscriber(self, Odometry, '/camera/odometry') 
         self.vehicle_position_sub = self.create_subscription(PoseStamped, '/vehicle/original_pose', self.vehicle_position_callback, 1)
+
+        self.bbox_sub = self.create_subscription(Detection2DArray, '/yolov7_detections', self.bbox_callback, 1)
         
         # Synchronize messages 
         self.ts = TimeSynchronizer([self.depth_sub, self.pose_sub], 10) 
@@ -52,6 +57,8 @@ class DepthToPointCloud(Node):
         self.depth_image_msg = None
 
         self.vehicle_position = None
+
+        self.point_cloud_pub = None
 
     def vehicle_position_callback(self, vehicle_position):
         self.vehicle_position = vehicle_position
@@ -104,16 +111,40 @@ class DepthToPointCloud(Node):
         cv_ptr = cv_ptr.astype(np.uint16) * self.k_depth_scaling_factor_
 
         self.depth_image_ = cv_ptr
+        self.get_logger().info("depth image shape 1 " + str(self.depth_image_.shape))
 
-        # Process the depth image and update the point cloud
-        t1 = self.get_clock().now()
-        self.process_depth_image(depth_image_msg)
-        t2 = self.get_clock().now()
+        # convert depth image to point cloud using depth image, camera intrinsics, camera pose, and scaling factor
+        # get z values from depth image
+        z_values = cv_ptr.flatten()
+        # get x, y values from pixel coordinates
+        x, y = np.meshgrid(np.arange(0, cv_ptr.shape[1]), np.arange(0, cv_ptr.shape[0]))
+        x = x.flatten()
+        y = y.flatten()
+        # get the pixel coordinates
+        u = x
+        v = y
+        # convert pixel coordinates to depth camera coordinates
+        #u, v = self.convert_pixel_coordinates(u, v)
+        # get the depth values
+        z = z_values
+        # convert depth values to meters using the scaling factor
+        z = z / self.k_depth_scaling_factor_
+        
+        # convert the pixel coordinates to camera coordinates using camera intrinsics
+        x = (u - self.cx) * z / self.fx
+        y = (v - self.cy) * z / self.fy
+        # convert the 3D coordinates to world coordinates
+        # get the transformation matrix
+        T = self.pose_to_transform(self.camera_pos_, self.camera_q_)
+        # get the 3D coordinates in world frame
+        point = np.array([x, y, z, np.ones_like(x)])
+        point = np.matmul(T, point)
+        point = point[:3]
+        self.point_cloud_ = point.T
+        # self.get_logger().info("point shapre 1 " + str(self.point_cloud_.shape))
 
-
-        # Time logging (in seconds)
-        fuse_time = (t2 - t1).nanoseconds / 1e9
-        self.get_logger().info(f'Fusion time: {fuse_time:.6f} seconds')
+        # Publish the point cloud
+        # self.publish_depth()
 
     def pose_to_transform(self, position, quaternion):
         """
@@ -130,89 +161,129 @@ class DepthToPointCloud(Node):
         return transform_matrix
 
 
-    def process_depth_image(self, depth_image_msg):
-        # x,y = self.convert_pixel_coordinates(303.0, 157.0)
-        u,v = 320, 180
-        self.get_logger().info(str(u) + " " + str(v))
-        # Convert depth image message to OpenCV format
-        depth_image = self.depth_image_
+    def bbox_callback(self, detection2d_msg):
+        # self.get_logger().info("bbox callback called")
+        # Get the bounding box coordinates
+        if self.depth_image_ is not None:
+            for detection2d in detection2d_msg.detections:
+                bbox_msg = detection2d.bbox
+                x1 = int(bbox_msg.center.position.x - bbox_msg.size_x / 2)   
+                x2 = int(bbox_msg.center.position.x + bbox_msg.size_x / 2)
+                y1 = int(bbox_msg.center.position.y - bbox_msg.size_y / 2)
+                y2 = int(bbox_msg.center.position.y + bbox_msg.size_y / 2)
+                # self.get_logger().info(str(x1) + " " + str(x2) + " " + str(y1) + " " + str(y2))
 
-        proj_points_cnt = 0
-        rows, cols = depth_image.shape
-        # camera_r = self.camera_q_.as_matrix()
-        inv_factor = 1.0 / self.k_depth_scaling_factor_
+                # shrink the bounding box by 10 percent
+                x1 = int(x1 + 0.1 * (x2 - x1))
+                x2 = int(x2 - 0.1 * (x2 - x1))
+                y1 = int(y1 + 0.1 * (y2 - y1))
+                y2 = int(y2 - 0.1 * (y2 - y1))
+                
+
+                # Convert the pixel coordinates to depth camera coordinates
+                u1, v1 = x1, y1
+                u2, v2 = x2, y2
+
+
+                # # Get the depth values
+                # depth_values = []
+                # for i in range(u1, u2):
+                #     for j in range(v1, v2):
+                #         depth_value = self.depth_image_[j, i]
+                #         # convert depth value to meters using the scaling factor
+                #         depth_value = depth_value / self.k_depth_scaling_factor_
+                #         depth_values.append(depth_value)
+
+
+                # # Get the average depth value
+                # avg_depth = np.mean(depth_values)
+
+                # Get the 3D coordinates of the bounding box
+                # x_mid = int((x1 + x2) / 2)
+                # y_mid = int((y1 + y2) / 2)
+                # z_depth = self.depth_image_[y_mid, x_mid]
+
+                # z = z_depth / self.k_depth_scaling_factor_
+                # x = (x_mid - self.cx) * z / self.fx
+                # y = (y_mid - self.cy) * z / self.fy
+                # z_bbox = self.depth_image_[v1:v2, u1:u2]
+                # z_vals = z_bbox / self.k_depth_scaling_factor_
+
+                # x, y = np.meshgrid(np.arange(0, self.depth_image_.shape[1]), np.arange(0, self.depth_image_.shape[0])) 
+                # Apply the bounding box to get the region of interest 
+                # x_bbox = x[y1:y2, x1:x2] 
+                # y_bbox = y[y1:y2, x1:x2]
+
+                # x_cal = (x_bbox - self.cx) * z_vals / self.fx
+                # y_cal = (y_bbox - self.cy) * z_vals / self.fy
+
+                # T = self.pose_to_transform(self.camera_pos_, self.camera_q_)
+                # # get the 3D coordinates in world frame
+                # point_orig = np.array([x_cal, y_cal, z_vals, np.ones_like(x_cal)])
+                # point_flat = point_orig.reshape(4, -1)
+                # point_flat = np.matmul(T, point_flat)
+                # point = point_flat[:3]
+                # self.get_logger().info(str(point.shape))
+
+                # depth_cam_pts = point.reshape(point_orig.shape[1], point_orig.shape[2], 3)
+
+                # self.get_logger().info(str(depth_cam_pts))
+                # self.get_logger().info(str(depth_cam_pts.shape))
+                # self.get_logger().info("point cloud points")
+
+                # self.point_cloud_pub = depth_cam_pts
+                # self.publish_depth()
+
+
+                # ros log info
+                if self.point_cloud_ is not None:
+                    height, width = self.depth_image_.shape
+                    # self.get_logger().info("depth image shape 2 " + str(self.depth_image_.shape))
+
+                    # Reshape each component of the point cloud back to the original image shape
+                    x_reshaped = self.point_cloud_[:, 0].reshape(height, width)
+                    y_reshaped = self.point_cloud_[:, 1].reshape(height, width)
+                    z_reshaped = self.point_cloud_[:, 2].reshape(height, width)
+
+                    x_bbox = x_reshaped[v1:v2, u1:u2] 
+                    y_bbox = y_reshaped[v1:v2, u1:u2] 
+                    z_bbox = z_reshaped[v1:v2, u1:u2] 
+
+                    # Stack the components back into the point cloud format (3D array) 
+                    point_bbox = np.stack((x_bbox, y_bbox, z_bbox), axis=-1)
+
+                    rows, cols, _ = point_bbox.shape
+                    center_row = rows // 2
+                    center_col = cols // 2
+
+                    center_coordinates = point_bbox[center_row, center_col]
+                    self.get_logger().info(str(center_coordinates))
+
+                    self.point_cloud_pub = point_bbox
+                    self.publish_depth()
+
+                    # self.get_logger().info(str(point_bbox))
+                    # self.get_logger().info(str(point_bbox.shape))
+
+                
+
+                    # self.get_logger().info(str(x_mid) + " " + str(y_mid))
+                    # pt_world2 = self.point_cloud_[int(x_mid * 640 + y_mid)]
+                    # pt_world3 = self.point_cloud_[int(x_mid * 480 + y_mid)]
+                    # pt_world4 = self.point_cloud_[int(y_mid * 640 + x_mid)]
+                    # pt_world5 = self.point_cloud_[int(y_mid * 480 + x_mid)]
+                    # self.get_logger().info(str(pt_world))
+                    # self.get_logger().info(str(pt_world2))
+                    # self.get_logger().info(str(pt_world3))
+                    # self.get_logger().info(str(pt_world4))
+                    # self.get_logger().info(str(pt_world5))
         
-        depth = depth_image[u,v]
-
-        z = depth / self.k_depth_scaling_factor_
-        x = (u - self.cx) * z / self.fx
-        y = (v - self.cy) * z / self.fy
-
-        pt_cur = np.array([x,y,z])
-
-        pt_cur = pt_cur.reshape(-1, 3)
-        pt_cur = np.append(pt_cur, [[1]], axis=1)
-        t_matrix = self.pose_to_transform(self.camera_pos_, self.camera_q_)
-
-        pt_world = np.matmul(pt_cur, t_matrix)
-        pt_world = pt_world[:, :3]
-        self.get_logger().info(str(pt_world))
-
-        # vehicle_r = vehicle_q_.as_matrix()
-
-        # point_cloud = []
-
-        # # Iterate over the depth image
-        # for v in range(self.depth_filter_margin_, rows - self.depth_filter_margin_, self.skip_pixel_):
-        #     for u in range(self.depth_filter_margin_, cols - self.depth_filter_margin_, self.skip_pixel_):
-        #         depth = depth_image[v, u] * inv_factor
-
-
-        #         # Apply depth filtering
-        #         if depth_image[v, u] == 0 or depth > self.depth_filter_maxdist_:
-        #             depth = self.depth_filter_maxdist_
-        #         elif depth < self.depth_filter_mindist_:
-        #             continue
-
-
-        #         # Convert to 3D point in the camera frame
-        #         pt_cur = np.array([
-        #             (u - self.cx) * depth / self.fx,
-        #             (v - self.cy) * depth / self.fy,
-        #             depth
-        #         ])
-
-
-        #         # Transform to world frame
-        #         pt_world = camera_r @ pt_cur + self.camera_pos_
-                
-                
-                
-        #         pt_world2 = vehicle_r @ pt_cur + vehicle_pos_
-
-
-
-        #         # Add the point to the point cloud list
-        #         point_cloud.append([pt_world[0], pt_world[1], pt_world[2]])
-        #         proj_points_cnt += 1
-
-        #         if (abs(v - x) <= 1 and abs(u - y) <= 1):
-        #             self.get_logger().info(str(v) + " " + str(u) + " " + str(pt_world[1]) + " " + str(pt_world[0]) + " " + str(pt_world[2]))
-        #             self.get_logger().info(str(v) + " " + str(u) + " " + str(pt_world2[0]) + " " + str(pt_world2[1]) + " " + str(pt_world2[2]))
-
-
-        # Store the processed point cloud
-        # self.point_cloud_ = point_cloud
-
-
-        # Publish the point cloud
-        # self.publish_depth()
 
     def publish_depth(self):
         # Create a PointCloud2 message
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
-        header.frame_id = "x500_depth_0/OakD-Lite/base_link/StereoOV7251"
+        header.frame_id = "world"
 
 
         fields = [
@@ -222,7 +293,7 @@ class DepthToPointCloud(Node):
         ]
 
         # Convert point cloud (list of [x, y, z]) to PointCloud2 message
-        cloud_msg = pc2.create_cloud(header, fields, self.point_cloud_)
+        cloud_msg = pc2.create_cloud(header, fields, self.point_cloud_pub)
 
 
         # Publish the point cloud
@@ -239,3 +310,11 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+
+
+
+
+
+
+
