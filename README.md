@@ -177,11 +177,12 @@ To run the Docker container, use the following commands:
 
 
     ```bash
-    xhost +local:docker
-    docker run -it --rm \
-        -e DISPLAY=$DISPLAY \
-        -e LIBGL_ALWAYS_SOFTWARE=1 \
-        -v /tmp/.X11-unix:/tmp/.X11-unix \
+        xhost +local:docker
+        docker run -it --rm \
+            -e DISPLAY=$DISPLAY \
+            -e LIBGL_ALWAYS_SOFTWARE=1 \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+        --network=host \
         your_image_name
     ```
 
