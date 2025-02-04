@@ -32,5 +32,4 @@ This project aims to develop a UAV system capable of approaching, detecting, ide
 
 ```sh
 git clone https://github.com/ZhiangChen/augmented_mapping.git
-cd docker
 ```
