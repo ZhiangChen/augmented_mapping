@@ -5,6 +5,8 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleLocalPosition, VehicleStatus, VehicleAttitudeSetpoint, TrajectorySetpoint
 from geometry_msgs.msg import Quaternion, PoseStamped, Pose
+from position_control.srv import SetTargetPosition
+from state_machine.srv import NotifyPositionReached  # Import service to notify state machine
 
 class UAVPositionController(Node):
     def __init__(self):
@@ -30,8 +32,17 @@ class UAVPositionController(Node):
 
         # Current and target positions
         self.vehicle_local_position = None
-        self.current_stage = "LIFT"
+        self.current_stage = "WAIT"
         self.vehicle_status = None
+
+        # Service for setting target position
+        self.target_position_service = self.create_service(
+            SetTargetPosition, 'set_target_position', self.set_target_position_callback)
+
+
+        # Client to notify state machine
+        self.notify_state_machine_client = self.create_client(
+            NotifyPositionReached, 'notify_position_reached')
 
 
         # Publisher for TrajectorySetpoint
@@ -118,6 +129,28 @@ class UAVPositionController(Node):
         self.target_z = msg.pose.position.z
 
 
+
+    def set_target_position_callback(self, request, response):
+        """Handles service request to move UAV."""
+        self.target_x = request.x
+        self.target_y = request.y
+        self.target_z = request.z
+        self.get_logger().info(f"Received target position: ({self.target_x}, {self.target_y}, {self.target_z})")
+
+        self.offboard_setpoint_counter = 0
+        self.current_stage = "LIFT"
+        response.success = True
+        return response
+
+    def notify_state_machine(self):
+        """Sends a service request to notify state machine when position is reached."""
+        request = NotifyPositionReached.Request()
+        future = self.notify_state_machine_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+        if future.result() and future.result().success:
+            self.get_logger().info("State machine notified successfully.")
+
+
     def control_loop(self):
 
         if self.offboard_setpoint_counter == 0:
@@ -163,6 +196,7 @@ class UAVPositionController(Node):
 
             if abs(error_z) < self.tolerance:
                 setpoint_msg.velocity = [0.0, 0.0, 0.0]  # Stop movement
+                self.notify_state_machine()
             else:
                 setpoint_msg.position = [self.target_x, self.target_y, self.target_z]
                 # setpoint_msg.velocity = [0.0, 0.0, self.kp * error_z]

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'position_control'
+package_name = 'state_machine'
 
 setup(
     name=package_name,
@@ -10,7 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/srv', ['srv/SetTargetPosition.srv'])
+        ('share/' + package_name + '/srv', ['srv/NotifyPositionReached.srv', 'srv/StartDetection.srv']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -21,7 +21,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'position_control = position_control.position_control:main'
+            'state_machine_node = state_machine.state_machine:main'
         ],
     },
 )
