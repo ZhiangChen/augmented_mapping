@@ -13,6 +13,7 @@ RUN apt-get update && \
     python3-wstool \
     build-essential \
     git \
+    nano \
     libeigen3-dev \
     ros-noetic-pcl-conversions \
     libopencv-dev \
@@ -57,7 +58,10 @@ RUN git clone https://github.com/stevengj/nlopt.git /root/nlopt && \
 RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && \
     mkdir -p /root/catkin_ws/src && \
     cd /root/catkin_ws/src && \
-    git clone https://github.com/yunhajo/FUEL.git"
+    git clone -b map_boundary https://github.com/yunhajo/FUEL.git"
+    # git clone https://github.com/aaryanmurgunde/Inspection-with-PX.git"
+
+# COPY ../../../FUEL_PX4 /root/catkin_ws/src
 
 # Create a Python script to add set(CMAKE_CXX_STANDARD 14) to all CMakeLists.txt files
 RUN cat <<EOF > /root/modify_cmakelists.py
