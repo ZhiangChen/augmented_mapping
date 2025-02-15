@@ -5,8 +5,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleLocalPosition, VehicleStatus, VehicleAttitudeSetpoint, TrajectorySetpoint
 from geometry_msgs.msg import Quaternion, PoseStamped, Pose
-from position_control.srv import SetTargetPosition
-from state_machine.srv import NotifyPositionReached  # Import service to notify state machine
+from std_srvs.srv import Trigger
+# from position_control.srv import SetTargetPosition
+# from state_machine.srv import NotifyPositionReached  # Import service to notify state machine
 
 class UAVPositionController(Node):
     def __init__(self):
@@ -36,13 +37,13 @@ class UAVPositionController(Node):
         self.vehicle_status = None
 
         # Service for setting target position
-        self.target_position_service = self.create_service(
-            SetTargetPosition, 'set_target_position', self.set_target_position_callback)
+        self.target_position_subscriber = self.create_subscription(
+            PoseStamped, '/target_pos', self.target_position_callback, qos_profile)
 
 
         # Client to notify state machine
         self.notify_state_machine_client = self.create_client(
-            NotifyPositionReached, 'notify_position_reached')
+            Trigger, 'position_control/done')
 
 
         # Publisher for TrajectorySetpoint
@@ -55,7 +56,7 @@ class UAVPositionController(Node):
 
 
         # Subscribers for current position
-        self.target_position_subscriber = self.create_subscription(PoseStamped, '/target_pos', self.target_position_callback, 10)
+        # self.target_position_subscriber = self.create_subscription(PoseStamped, '/target_pos', self.target_position_callback, 10)
         self.vehicle_local_position_subscriber = self.create_subscription(
             VehicleLocalPosition, '/fmu/out/vehicle_local_position', self.vehicle_local_position_callback, qos_profile)
         self.vehicle_status_subscriber = self.create_subscription(
@@ -123,10 +124,11 @@ class UAVPositionController(Node):
 
 
     def target_position_callback(self, msg):
-        # self.get_logger().info("target set")
+        self.get_logger().info("target set")
         self.target_x = msg.pose.position.x
         self.target_y = msg.pose.position.y
         self.target_z = msg.pose.position.z
+        self.current_stage = "LIFT"
 
 
 
@@ -144,7 +146,7 @@ class UAVPositionController(Node):
 
     def notify_state_machine(self):
         """Sends a service request to notify state machine when position is reached."""
-        request = NotifyPositionReached.Request()
+        request = Trigger.Request()
         future = self.notify_state_machine_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
         if future.result() and future.result().success:
@@ -171,7 +173,10 @@ class UAVPositionController(Node):
 
                 if abs(error_z) < self.tolerance:
                     self.get_logger().info("switching to move to xy")
-                    self.current_stage = "MOVE_TO_XY"
+                    if self.target_x is not None and self.target_y is not None:
+                        self.current_stage = "MOVE_TO_XY"
+                    else: 
+                        setpoint_msg.position = [self.vehicle_local_position.x, self.vehicle_local_position.y, self.lift_height]
                 else:
                     setpoint_msg.position = [self.vehicle_local_position.x, self.vehicle_local_position.y, self.lift_height]
                     # setpoint_msg.velocity = [0.0, 0.0, self.kp * error_z]

@@ -1,104 +1,83 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
-from state_machine.srv import NotifyPositionReached, StartDetection
-from position_control.srv import SetTargetPosition
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from transitions import Machine
+from std_srvs.srv import Trigger
+from geometry_msgs.msg import Point, PoseStamped
 
 
-class UAVStateMachine(Node):
+class StateMachineNode(Node):
     def __init__(self):
-        super().__init__('uav_state_machine')
+        super().__init__('state_machine')
+
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+
+        # State machine states
+        states = ['idle', 'moving', 'tracking']
+        
+        # Define the state machine
+        self.machine = Machine(model=self, states=states, initial='idle')
+        self.machine.add_transition('start_moving', 'idle', 'moving', after='send_target_pose')
+        self.machine.add_transition('position_reached', 'moving', 'tracking', after='start_tracking')
+        self.machine.add_transition('stop_tracking', 'tracking', 'idle')
+        
+        # Service clients
+        self.pose_publisher = self.create_publisher(PoseStamped, '/target_pos', qos_profile)
+        self.yolov7_ros_client = self.create_client(Trigger, 'yolov7_ros/start')
+        
+        # Service server to receive position control completion signal
+        self.done_service = self.create_service(Trigger, 'position_control/done', self.done_callback)
+        
+        self.get_logger().info("State Machine Initialized in 'idle' state.")
+        self.send_target_pose()
+
+    def send_target_pose(self):
+        target_pose = PoseStamped()
+        target_x = 5.0
+        target_y = 5.0
+        target_pose.pose.position.x = target_x
+        target_pose.pose.position.y = target_y
+        self.pose_publisher.publish(target_pose)
+        self.get_logger().info("Sent target position to position control.")
+
+    def done_callback(self, request, response):
+        self.position_reached()
+        self.get_logger().info("Position reached. Transitioning to tracking.")
+        response.success = True
+        response.message = "Position reached. Transitioning to tracking."
+        return response
 
 
-        # Define states
-        self.IDLE = 'IDLE'
-        self.MOVING = 'MOVING'
-        self.WAITING = 'WAITING'
-        self.DETECTING = 'DETECTING'
-        self.COMPLETED = 'COMPLETED'
-
-
-        # Initialize the current state
-        self.current_state = self.IDLE
-
-
-        # Create service clients
-        self.position_client = self.create_client(SetTargetPosition, 'set_position')
-        self.detection_client = self.create_client(StartDetection, 'start_detection')
-
-
-        # Create publishers or subscribers if needed
-        self.publisher = self.create_publisher(String, 'status', 10)
-
-
-        # Create a timer to trigger state transitions
-        self.timer = self.create_timer(2.0, self.timer_callback)
-
-
-    def timer_callback(self):
-        """Timer callback to handle state transitions based on current state."""
-        if self.current_state == self.IDLE:
-            self.get_logger().info('State: IDLE, sending position...')
-            self.send_position_service()
-            self.current_state = self.MOVING  # Transition to MOVING
-
-
-        elif self.current_state == self.MOVING:
-            self.get_logger().info('State: MOVING, waiting for position reach...')
-            self.reach_position()  # Check if position is reached and transition to WAITING
-
-
-        elif self.current_state == self.WAITING:
-            self.get_logger().info('State: WAITING, starting detection...')
-            self.start_detection_service()
-            self.current_state = self.DETECTING  # Transition to DETECTING
-
-
-        elif self.current_state == self.DETECTING:
-            self.get_logger().info('State: DETECTING, process complete.')
-            self.current_state = self.COMPLETED  # Transition to COMPLETED
-
-
-        elif self.current_state == self.COMPLETED:
-            self.get_logger().info('State: COMPLETED.')
-
-
-    def send_position_service(self):
-        """Send a service request to the position control to set the UAV's position."""
-        if not self.position_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().warn('Position service not available.')
+    def start_tracking(self):
+        if not self.yolov7_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().error("YOLOv7 detection service not available.")
             return
-
-
-        request = SetPosition.Request()
-        request.x = 10.0  # Example position
-        request.y = 20.0
-        self.position_client.call_async(request)
-
-
-    def reach_position(self):
-        """Check if the UAV has reached the target position."""
-        # This could be extended to check the current position and compare it to the target
-        # If the position is reached, trigger the transition to WAITING
-        self.get_logger().info('Position reached, transitioning to WAITING.')
-
-
-    def start_detection_service(self):
-        """Send a service request to start the detection process."""
-        if not self.detection_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().warn('Detection service not available.')
-            return
-
 
         request = StartDetection.Request()
-        self.detection_client.call_async(request)
+        future = self.yolov7_client.call_async(request)
+        future.add_done_callback(self.tracking_started_callback)
+
+
+    def tracking_started_callback(self, future):
+        if future.result().success:
+            self.get_logger().info("Started object tracking.")
+        else:
+            self.get_logger().error("Failed to start object tracking.")
+
+
+
 
 
 def main(args=None):
     rclpy.init(args=args)
-    state_machine = UAVStateMachine()
-    rclpy.spin(state_machine)
-    state_machine.destroy_node()
+    node = StateMachineNode()
+    rclpy.spin(node)
+    node.destroy_node()
     rclpy.shutdown()
 
 
