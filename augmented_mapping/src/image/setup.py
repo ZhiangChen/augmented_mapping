@@ -21,7 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'image_node = image.image_node:main',
-            'image_pc_node = image.image_pc_node:main'
+            'image_pc_node = image.image_pc_node:main',
+            'image_bbox_node = image.image_bbox_node:main'
         ],
     },
 )

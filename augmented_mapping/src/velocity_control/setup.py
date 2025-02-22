@@ -23,6 +23,7 @@ setup(
             'velocity_control_node = velocity_control.velocity_control:main',
             'velocity_manual_node = velocity_control.velocity_manual_control:main',
             'velocity_fuel_node = velocity_control.velocity_fuel_control:main',
+            'velocity_bbox_node = velocity_control.velocity_bbox_control:main',
         ],
     },
 )
