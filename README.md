@@ -298,7 +298,7 @@ To run the Docker container, use the following commands:
     source /opt/ros/humble/setup.bash
     colcon build
     source install/local_setup.bash
-    ros2 launch perception perception_node
+    ros2 launch perception perception_launch.py
     ```
 
 12. Build and run the velocity control node:
@@ -309,7 +309,7 @@ To run the Docker container, use the following commands:
     source /opt/ros/humble/setup.bash
     colcon build
     source install/local_setup.bash
-    ros2 run velocity_control velocity_control_node
+    ros2 run velocity_control velocity_fuel_node
     ```
 
 13. Run rtabmap:
@@ -397,3 +397,4 @@ Carefully tuning these parameters will help achieve smooth and accurate UAV oper
 ### FUEL unable to find any frontiers
 
 If FUEL package fails with error "No coverable frontiers" when triggered, then modify parameters in file fuel_planner/exploration_manager/launch/exploration.launch. Box_min_x, box_min_y, Box_min_z, Box_max_x, Box_max_y, Box_max_z values need to be changed.
+
