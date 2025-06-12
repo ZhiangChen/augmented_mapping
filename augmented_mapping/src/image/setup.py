@@ -21,7 +21,11 @@ setup(
     entry_points={
         'console_scripts': [
             'image_node = image.image_node:main',
+<<<<<<< HEAD
             'image_pc_node = image.image_pc_node:main'
+=======
+            'image_pc_node = image.image_pc_node:main',
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
             'image_bbox_node = image.image_bbox_node:main'
         ],
     },

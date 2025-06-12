@@ -14,6 +14,10 @@ class UAVPositionController(Node):
    def __init__(self):
        super().__init__('uav_position_controller')
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        qos_profile = QoSProfile(
            reliability=ReliabilityPolicy.BEST_EFFORT,
            durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -21,15 +25,32 @@ class UAVPositionController(Node):
            depth=1
        )
 
+<<<<<<< HEAD
        # Parameters
        self.lift_height = self.declare_parameter("lift_height", -6.0).value
+=======
+
+
+
+       # Parameters
+       self.lift_height = self.declare_parameter("lift_height", -5.0).value
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        self.target_x = None
        self.target_y = None
        self.target_z = None
        self.kp = self.declare_parameter("kp", 1.0).value
+<<<<<<< HEAD
        self.tolerance = self.declare_parameter("tolerance", 0.5).value
        self.offboard_setpoint_counter = 0
 
+=======
+       self.tolerance = self.declare_parameter("tolerance", 0.1).value
+       self.offboard_setpoint_counter = 0
+
+
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        # Current and target positions
        self.vehicle_local_position = None
        self.current_stage = "WAIT"
@@ -41,13 +62,24 @@ class UAVPositionController(Node):
            PoseStamped, '/target_pos', self.target_position_callback, qos_profile)
 
 
+<<<<<<< HEAD
        # Client to notify state machine
        self.ready_state_machine_client = self.create_client(
            Trigger, 'position_control/ready')
+=======
+
+
+       # Client to notify state machine
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        self.notify_state_machine_client = self.create_client(
            Trigger, 'position_control/done')
 
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        # Publisher for TrajectorySetpoint
        self.offboard_control_mode_publisher = self.create_publisher(
            OffboardControlMode, '/fmu/in/offboard_control_mode', qos_profile)
@@ -69,31 +101,43 @@ class UAVPositionController(Node):
 
 
 
+<<<<<<< HEAD
 
 
        self.notified = False
 
 
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        # Timer for the control loop
        self.timer = self.create_timer(0.1, self.control_loop)
 
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
    def vehicle_local_position_callback(self, vehicle_local_position):
        """Callback function for vehicle_local_position topic subscriber."""
        self.vehicle_local_position = vehicle_local_position
 
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
    def vehicle_status_callback(self, vehicle_status):
        """Callback function for vehicle_status topic subscriber."""
        self.vehicle_status = vehicle_status
 
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
    def arm(self):
        """Send an arm command to the vehicle."""
        self.publish_vehicle_command(
@@ -101,6 +145,7 @@ class UAVPositionController(Node):
        self.get_logger().info('Arm command sent')
 
 
+<<<<<<< HEAD
 
 
    def disarm(self):
@@ -121,6 +166,22 @@ class UAVPositionController(Node):
 
 
 
+=======
+   def disarm(self):
+       """Send a disarm command to the vehicle."""
+       self.publish_vehicle_command(
+           VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=0.0)
+       self.get_logger().info('Disarm command sent')
+
+
+   def engage_offboard_mode(self):
+       """Switch to offboard mode."""
+       self.publish_vehicle_command(
+           VehicleCommand.VEHICLE_CMD_DO_SET_MODE, param1=1.0, param2=6.0)
+       self.get_logger().info("Switching to offboard mode")
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
    def publish_offboard_control_heartbeat_signal(self):
        """Publish the offboard control mode."""
        msg = OffboardControlMode()
@@ -133,8 +194,11 @@ class UAVPositionController(Node):
        self.offboard_control_mode_publisher.publish(msg)
 
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
    def publish_vehicle_command(self, command, **params) -> None:
        """Publish a vehicle command."""
        msg = VehicleCommand()
@@ -162,7 +226,13 @@ class UAVPositionController(Node):
        self.target_x = msg.pose.position.x
        self.target_y = msg.pose.position.y
        self.target_z = msg.pose.position.z
+<<<<<<< HEAD
        self.current_stage = "MOVE_TO_XY"
+=======
+       self.current_stage = "LIFT"
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
 
 
 
@@ -175,14 +245,18 @@ class UAVPositionController(Node):
        self.get_logger().info(f"Received target position: ({self.target_x}, {self.target_y}, {self.target_z})")
 
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        self.offboard_setpoint_counter = 0
        self.current_stage = "LIFT"
        response.success = True
        return response
 
 
+<<<<<<< HEAD
    def ready_state_machine(self):
        """Sends a service request to notify state machine when position is reached."""
        request = Trigger.Request()
@@ -194,6 +268,17 @@ class UAVPositionController(Node):
        self.notified = True
        request = Trigger.Request()
        future = self.notify_state_machine_client.call_async(request)
+=======
+   def notify_state_machine(self):
+       """Sends a service request to notify state machine when position is reached."""
+       request = Trigger.Request()
+       future = self.notify_state_machine_client.call_async(request)
+       rclpy.spin_until_future_complete(self, future)
+       if future.result() and future.result().success:
+           self.get_logger().info("State machine notified successfully.")
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
 
 
    def control_loop(self):
@@ -202,7 +287,10 @@ class UAVPositionController(Node):
        if self.offboard_setpoint_counter == 0:
            self.engage_offboard_mode()
            self.arm()
+<<<<<<< HEAD
            self.current_stage = "LIFT"
+=======
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        self.offboard_setpoint_counter += 1
 
 
@@ -213,24 +301,51 @@ class UAVPositionController(Node):
        setpoint_msg.yaw = 1.57079
 
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        if self.current_stage == "LIFT":
            if self.vehicle_local_position is not None:
                error_z = self.lift_height - self.vehicle_local_position.z
 
 
+<<<<<<< HEAD
                if abs(error_z) < self.tolerance:
                    self.get_logger().info("ready to receive target position")
                    self.ready_state_machine()
 
+=======
+
+
+               if abs(error_z) < self.tolerance:
+                   self.get_logger().info("switching to move to xy")
+                   if self.target_x is not None and self.target_y is not None:
+                       self.current_stage = "MOVE_TO_XY"
+                   else:
+                       setpoint_msg.position = [self.vehicle_local_position.x, self.vehicle_local_position.y, self.lift_height]
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
                else:
                    setpoint_msg.position = [self.vehicle_local_position.x, self.vehicle_local_position.y, self.lift_height]
                    # setpoint_msg.velocity = [0.0, 0.0, self.kp * error_z]
 
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
        elif self.current_stage == "MOVE_TO_XY":
            error_x = self.target_x - self.vehicle_local_position.x
            error_y = self.target_y - self.vehicle_local_position.y
 
+<<<<<<< HEAD
+=======
+
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
            if math.sqrt(error_x**2 + error_y**2) < self.tolerance:
                self.get_logger().info(str(math.sqrt(error_x**2 + error_y**2)) + " switching to descend")
                self.current_stage = "DESCEND"
@@ -238,17 +353,33 @@ class UAVPositionController(Node):
                setpoint_msg.position = [self.target_x, self.target_y, self.vehicle_local_position.z]
                # setpoint_msg.velocity = [self.kp * error_x, self.kp * error_y, 0.0]
 
+<<<<<<< HEAD
        elif self.current_stage == "DESCEND":
            error_z = self.lift_height - self.vehicle_local_position.z
+=======
+
+
+
+       elif self.current_stage == "DESCEND":
+           error_z = self.target_z - self.vehicle_local_position.z
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
 
 
            if abs(error_z) < self.tolerance:
                setpoint_msg.velocity = [0.0, 0.0, 0.0]  # Stop movement
+<<<<<<< HEAD
                if self.notified == False:
                    self.get_logger().info("Notifying the state machine")
                    self.notify_state_machine()
            else:
                setpoint_msg.position = [self.target_x, self.target_y, self.lift_height]
+=======
+               self.notify_state_machine()
+           else:
+               setpoint_msg.position = [self.target_x, self.target_y, self.target_z]
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
                # setpoint_msg.velocity = [0.0, 0.0, self.kp * error_z]
 
 
@@ -258,6 +389,11 @@ class UAVPositionController(Node):
        self.trajectory_setpoint_publisher.publish(setpoint_msg)
 
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
 def main(args=None):
    rclpy.init(args=args)
    controller = UAVPositionController()
@@ -266,6 +402,7 @@ def main(args=None):
    rclpy.shutdown()
 
 
+<<<<<<< HEAD
 if __name__ == '__main__':
   main()
 
@@ -275,5 +412,11 @@ if __name__ == '__main__':
 
 
 
+=======
+
+
+if __name__ == '__main__':
+   main()
+>>>>>>> 1babdd5953934a3ac50ce7524e2f58a29a70478a
 
 
