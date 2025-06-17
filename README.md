@@ -188,7 +188,7 @@ Open another terminal and start PX4 SITL with Gazebo:
     make px4_sitl gz_x500
     ```
 
-    To run with your own model:
+To run with your own model:
     
     ```bash
     cd .gz
@@ -197,17 +197,17 @@ Open another terminal and start PX4 SITL with Gazebo:
     mkdir model_name
     ```
     
-    Run the commands above and place model.sdf, model.config, and meshes file.
+Run the commands above and place model.sdf, model.config, and meshes file.
 
-    Now run 
+Now run 
 
     ```bash
     cd PX4-Autopilot/Tool/simulation/gz/worlds
     ```
 
-    and create a new world.config file under the directory that contains your new model.
+and create a new world.config file under the directory that contains your new model.
 
-    Afterwards, 
+Afterwards, 
 
     ```bash
     export GZ_SIM_RESOURCE_PATH="$pwd/.gz/models"
