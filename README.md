@@ -148,9 +148,9 @@ To build the Docker image for this project, follow these steps:
 
 Follow instructions on YOLOv7 Github page: https://github.com/WongKinYiu/yolov7
 
-# Running Augmented_Mapping System
+## Running Augmented_Mapping System
 
-# Table of Contents
+## Table of Contents
 
 1. [Run Micro XRCE-DDS Agent](#1-run-micro-xrce-dds-agent)  
 2. [Run PX4 Autopilot with Gazebo](#2-run-px4-autopilot-with-gazebo)  
