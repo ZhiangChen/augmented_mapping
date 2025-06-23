@@ -36,7 +36,7 @@ This project aims to develop a UAV system capable of approaching, detecting, ide
 ## Installation
 
 
-## Installing Docker
+### Packages and Docker Containers
 
 
 Follow these steps to install Docker on your Ubuntu system:
@@ -148,7 +148,113 @@ To build the Docker image for this project, follow these steps:
 
 Follow instructions on YOLOv7 Github page: https://github.com/WongKinYiu/yolov7
 
-### Running YOLOv7 Model
+## Running Augmented_Mapping System
+
+## Table of Contents
+
+1. [Run Micro XRCE-DDS Agent](#1-run-micro-xrce-dds-agent)  
+2. [Run PX4 Autopilot with Gazebo](#2-run-px4-autopilot-with-gazebo)  
+3. Run Gazebo Bridges  
+   3.1. [Run the Clock Bridge](#run-the-clock-bridge)  
+   3.2. [Run the Camera Bridge](#run-the-camera-bridge)  
+4. Run YOLOv7  
+   4.1. [Run YOLOv7 ROS Node](#run-yolov7-ros-node)  
+   4.2. [Run ros_iou_tracking Node](#run-ros_iou_tracking-node)  
+5. [Run ROS1-ROS2 Bridge](#5-run-ros1-ros2-bridge)  
+6. [Running the FUEL-Based Exploration Algorithm](#6-running-the-fuel-based-exploration-algorithm)  
+7. Run the packages  
+   7.1. [Build and launch the perception node](#build-and-launch-the-perception-node)  
+   7.2. [Build and run the image node](#build-and-run-the-image-node)  
+   7.3. [Build and run the state_machine node](#build-and-run-the-state_machine-node)  
+   7.4. [Build and run the position_control node](#build-and-run-the-position_control-node)  
+   7.5. [Build and run the velocity control node](#build-and-run-the-velocity-control-node)  
+   7.6. [Run rtabmap](#run-rtabmap)  
+
+## 1. Run Micro XRCE-DDS Agent
+
+The Micro XRCE-DDS Agent allows PX4 to communicate with ROS 2 over DDS.
+
+```bash
+cd Micro-XRCE-DDS-Agent
+MicroXRCEAgent udp4 -p 8888
+```
+## 2. Run PX4 Autopilot with Gazebo
+
+Open another terminal and start PX4 SITL with Gazebo:
+
+
+    ```bash
+    cd PX4-Autopilot/
+    make px4_sitl gz_x500
+    ```
+
+To run with your own model:
+    
+    ```bash
+    cd .gz
+    mkdir models
+    cd models
+    mkdir model_name
+    ```
+    
+Run the commands above and place model.sdf, model.config, and meshes file.
+
+Now run 
+
+    ```bash
+    cd PX4-Autopilot/Tool/simulation/gz/worlds
+    ```
+
+and create a new world.config file under the directory that contains your new model.
+
+Afterwards, 
+
+    ```bash
+    export GZ_SIM_RESOURCE_PATH="$pwd/.gz/models"
+    PX4_GZ_WORLD=model_name make px4_sitl gz_x500_depth
+    ```
+
+## 3. Run Gazebo Bridges
+
+Run ROS 2 bridges to connect ROS topics with Gazebo simulation.
+
+### Run the Clock Bridge
+
+```bash
+cd ros2_ws/
+source install/setup.bash
+ros2 run ros_gz_bridge parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
+```
+
+### Run the Camera Bridge
+
+```bash
+cd ros2_ws/
+source install/setup.bash
+ros2 run ros_gz_image image_bridge /camera /depth_camera
+```
+
+If the bridge doesn't work, try the following:
+```bash
+export GZ_VERSION=harmonic
+colcon build
+```
+
+ALTERNATIVELY:
+
+Install and run ROS-gazebo bridge 
+
+    ```bash
+    sudo apt-get install ros-humble-ros-gzgarden
+    ros2 run ros_gz_image image_bridge /camera /depth_camera
+    ros2 run ros_gz_bridge parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
+    ```
+    
+    Replace with your version of ROS and Gazebo. Tested on ROS Humble and Gazebo Garden.
+
+## 4. Run YOLOv7
+
+### Run YOLOv7 ROS Node
 
 To run YOLOv7 ROS node, first make a new workspace and copy contents of yolov7_ws:
 
@@ -159,42 +265,27 @@ To run YOLOv7 ROS node, first make a new workspace and copy contents of yolov7_w
     git clone https://github.com/yunhajo03/yolov7-ros.git 
     ```
 
-
 Next, launch yolov7:
     ```bash
+    cd ros2_ws/src/yolov7_ros/
+    source install/setup.bash
     ros2 launch yolov7_ros yolov7.launch
     ```
 
 Parameters can be modified in launch/yolov7.launch file.
 
-## Running the FUEL-Based Exploration Algorithm
+### Run ros_iou_tracking Node
 
+```bash
+cd ros2_ws/
+git clone --branch ros2 https://github.com/yunhajo03/ros_iou_tracking.git
+source install/setup.bash
+ros2 run ros_iou_tracking iou_tracker
+```
 
-To run the Docker container, use the following commands:
+## 5. Run ROS1-ROS2 Bridge
 
-
-1. Run the Docker container:
-
-
-    ```bash
-    xhost +local:docker
-    docker run -it --rm \
-        -e DISPLAY=$DISPLAY \
-        -e LIBGL_ALWAYS_SOFTWARE=1 \
-        -v /tmp/.X11-unix:/tmp/.X11-unix \
-        your_image_name
-    ```
-
-
-2. Inside the Docker container, start `roscore`:
-
-
-    ```bash
-    roscore
-    ```
-
-
-3. Open a new terminal and run the ROS1-ROS2 bridge:
+Open a new terminal and run the ROS1-ROS2 bridge:
 
 
     ```bash
@@ -203,91 +294,62 @@ To run the Docker container, use the following commands:
     ros2 run ros1_bridge dynamic_bridge
     ```
 
+## 6. Running the FUEL-Based Exploration Algorithm
+
+To run the Docker container, use the following commands:
+
+1. Run the Docker container:
+
+    ```bash
+        xhost +local:docker
+        docker run -it --rm \
+            -e DISPLAY=$DISPLAY \
+            -e LIBGL_ALWAYS_SOFTWARE=1 \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+        --network=host \
+        your_image_name
+    ```
+
+2. Inside the Docker container, start `roscore`:
+
+    ```bash
+    roscore
+    ```
+
+
+3. Open a new terminal and run the ROS1-ROS2 bridge:
+
+    ```bash
+    source /opt/ros/humble/setup.bash
+    source ~/ros-humble-ros1-bridge/install/local_setup.bash
+    ros2 run ros1_bridge dynamic_bridge
+    ```
 
 4. Get the Docker container name:
-
 
     ```bash
     docker ps
     ```
 
-
 5. Execute the exploration manager commands in the Docker container:
-
 
     ```bash
     docker exec -it <container_name> bash
     source devel/setup.bash && roslaunch exploration_manager rviz.launch
     ```
 
-
 6. Run the exploration launch file:
-
 
     ```bash
     docker exec -it <container_name> bash
     source devel/setup.bash && roslaunch exploration_manager exploration.launch
     ```
 
+## 7. Run the packages
 
-7. Open a new terminal and start the Micro-XRCE-DDS-Agent:
+Following packages are all packages under augmented_mapping folder. They should be cloned from Github and placed into ros2_ws/src folder.
 
-
-    ```bash
-    cd Micro-XRCE-DDS-Agent
-    MicroXRCEAgent udp4 -p 8888
-    ```
-
-
-8. Open another terminal and start PX4 SITL with Gazebo:
-
-
-    ```bash
-    cd PX4-Autopilot/
-    make px4_sitl gz_x500
-    ```
-
-    To run with your own model:
-    
-    ```bash
-    cd .gz
-    mkdir models
-    cd models
-    mkdir model_name
-    ```
-    
-    Run the commands above and place model.sdf, model.config, and meshes file.
-
-    Now run 
-
-    ```bash
-    cd PX4-Autopilot/Tool/simulation/gz/worlds
-    ```
-
-    and create a new world.config file under the directory that contains your new model.
-
-    Afterwards, 
-
-    ```bash
-    export GZ_SIM_RESOURCE_PATH="$pwd/.gz/models"
-    PX4_GZ_WORLD=model_name make px4_sitl gz_x500_depth
-    ```
-
-9. Install and run ROS-gazebo bridge 
-
-    ```bash
-    sudo apt-get install ros-humble-ros-gzgarden
-    ros2 run ros_gz_image image_bridge /camera /depth_camera
-    ```
-    
-    Replace with your version of ROS and Gazebo. Tested on ROS Humble and Gazebo Garden.
-
-10. Run ROS-Gazebo bridge for clock
-    ```bash
-    ros2 run ros_gz_bridge parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
-    ```
-
-11. Build and launch the perception node:
+### Build and launch the perception node
 
 
     ```bash
@@ -297,10 +359,43 @@ To run the Docker container, use the following commands:
     source /opt/ros/humble/setup.bash
     colcon build
     source install/local_setup.bash
-    ros2 launch perception perception_node
+    ros2 launch perception perception_launch.py
     ```
 
-12. Build and run the velocity control node:
+### Build and run the image node
+
+
+    ```bash
+    cd ros2_ws/src
+    git clone https://github.com/PX4/px4_msgs
+    cd ros2_ws
+    source /opt/ros/humble/setup.bash
+    colcon build
+    source install/local_setup.bash
+    ros2 run image image_bbox_node
+    ```
+
+### Build and run the state_machine node
+
+    ```bash
+    cd ros2_ws
+    source /opt/ros/humble/setup.bash
+    colcon build
+    source install/local_setup.bash
+    ros2 run state_machine state_machine_node
+    ```
+
+### Build and run the position_control node
+
+    ```bash
+    cd ros2_ws
+    source /opt/ros/humble/setup.bash
+    colcon build
+    source install/local_setup.bash
+    ros2 run position_control position_control_final
+    ```
+
+### Build and run the velocity control node
 
 
     ```bash
@@ -308,10 +403,13 @@ To run the Docker container, use the following commands:
     source /opt/ros/humble/setup.bash
     colcon build
     source install/local_setup.bash
-    ros2 run velocity_control velocity_control_node
+    ros2 run velocity_control velocity_fuel_node
     ```
+> **Note:**  
+> The `position_control` and `velocity_control` nodes both publish to `/fmu/in/vehicle_command`, which causes interference.  
+> Therefore, **do not run both nodes simultaneously** to avoid conflicts.
 
-13. Run rtabmap:
+### Run rtabmap
 
     ```bash
     sudo apt update
@@ -396,3 +494,4 @@ Carefully tuning these parameters will help achieve smooth and accurate UAV oper
 ### FUEL unable to find any frontiers
 
 If FUEL package fails with error "No coverable frontiers" when triggered, then modify parameters in file fuel_planner/exploration_manager/launch/exploration.launch. Box_min_x, box_min_y, Box_min_z, Box_max_x, Box_max_y, Box_max_z values need to be changed.
+
